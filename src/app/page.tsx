@@ -15,47 +15,47 @@ export default function Home() {
   const metronomeRef = useRef<MetronomeHandle>(null);
   
   const { toast } = useToast();
-  
+
+  const stopPractice = useCallback(() => {
+    if (metronomeRef.current) {
+        metronomeRef.current.stop();
+    }
+    if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+      audioContextRef.current.close().then(() => {
+        audioContextRef.current = null;
+      });
+    }
+    setMetronomeIsPlaying(false);
+  }, []);
+
   const startPractice = useCallback(async () => {
     try {
-      if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
-        // A context already exists and is not closed, do nothing.
-      } else {
         const context = new (window.AudioContext || (window as any).webkitAudioContext)();
         audioContextRef.current = context;
-      }
-      
-      const context = audioContextRef.current;
 
-      if (context.state === 'suspended') {
-        await context.resume();
-      }
+        if (context.state === 'suspended') {
+            await context.resume();
+        }
 
-      metronomeRef.current?.start(currentBpm, context);
-      setMetronomeIsPlaying(true);
+        if (metronomeRef.current) {
+            metronomeRef.current.start(currentBpm, context);
+            setMetronomeIsPlaying(true);
+        }
     } catch (e) {
       console.error("Failed to start practice:", e);
       toast({
         title: "Error",
-        description: "Could not start the metronome. Please try again.",
+        description: "Could not start the microphone or metronome. Please check permissions and try again.",
         variant: "destructive"
       });
       setMetronomeIsPlaying(false);
     }
   }, [currentBpm, toast]);
 
-  const stopPractice = useCallback(async () => {
-    metronomeRef.current?.stop();
-    if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
-      await audioContextRef.current.close();
-      audioContextRef.current = null;
-    }
-    setMetronomeIsPlaying(false);
-  }, []);
 
   const handleTogglePractice = async () => {
     if (metronomeIsPlaying) {
-      await stopPractice();
+      stopPractice();
     } else {
       await startPractice();
     }
@@ -64,11 +64,9 @@ export default function Home() {
   useEffect(() => {
     // Cleanup on component unmount
     return () => {
-      if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
-        audioContextRef.current.close();
-      }
+      stopPractice();
     };
-  }, []);
+  }, [stopPractice]);
 
   return (
     <main className="flex min-h-screen w-full flex-col items-center justify-center p-4">
