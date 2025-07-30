@@ -57,6 +57,7 @@ export default function Home() {
     audioLevel: 0,
     frequencyData: new Uint8Array(0),
     dominantFrequency: 0,
+    spectralCentroid: 0,
   });
 
   const { start: startVisualizer, stop: stopVisualizer } = useAudioData(setAudioAnalysisData);

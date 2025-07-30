@@ -7,6 +7,7 @@ export type AudioAnalysisData = {
   audioLevel: number;
   frequencyData: Uint8Array;
   dominantFrequency: number;
+  spectralCentroid: number;
 };
 
 export function useAudioData(setAudioAnalysisData: Dispatch<SetStateAction<AudioAnalysisData>>) {
@@ -40,10 +41,22 @@ export function useAudioData(setAudioAnalysisData: Dispatch<SetStateAction<Audio
       }
       const dominantFrequency = maxIndex * audioContextRef.current.sampleRate / analyser.fftSize;
 
+      // Calculate Spectral Centroid (Timbre "brightness")
+      let weightedSum = 0;
+      let totalSum = 0;
+      for (let i = 0; i < bufferLength; i++) {
+        const freq = i * audioContextRef.current.sampleRate / analyser.fftSize;
+        weightedSum += freq * freqDataArray[i];
+        totalSum += freqDataArray[i];
+      }
+      const spectralCentroid = totalSum === 0 ? 0 : weightedSum / totalSum;
+
+
       setAudioAnalysisData({
         audioLevel: scaledLevel,
         frequencyData: freqDataArray,
         dominantFrequency: dominantFrequency,
+        spectralCentroid: spectralCentroid,
       });
 
       animationFrameRef.current = requestAnimationFrame(draw);
@@ -69,7 +82,8 @@ export function useAudioData(setAudioAnalysisData: Dispatch<SetStateAction<Audio
     setAudioAnalysisData({
         audioLevel: 0,
         frequencyData: new Uint8Array(0),
-        dominantFrequency: 0
+        dominantFrequency: 0,
+        spectralCentroid: 0,
     });
   }, [setAudioAnalysisData]);
 

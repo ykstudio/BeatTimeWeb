@@ -13,9 +13,29 @@ type AudioAnalysisDisplayProps = {
   logSettings: LogSettingsType;
 };
 
+// Map spectral centroid to an HSL color
+// Lower centroid (bass sounds) -> cooler colors (blue/purple)
+// Higher centroid (treble sounds) -> warmer colors (yellow/orange)
+function getTimbreColor(centroid: number): string {
+    if (centroid === 0) return 'hsl(240, 10%, 25%)'; // Default color for silence
+    
+    // Normalize centroid (values can range roughly from 0 to 10000)
+    // We'll cap it at 5000 for a reasonable color range
+    const normalized = Math.min(centroid / 5000, 1);
+    
+    // Map normalized value to hue (240 for blue down to 0 for red)
+    const hue = 240 - (normalized * 200); 
+    const saturation = 70;
+    const lightness = 50;
+
+    return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+}
+
+
 export default function AudioAnalysisDisplay({ analysisData, logSettings }: AudioAnalysisDisplayProps) {
-  const { frequencyData, dominantFrequency, audioLevel } = analysisData;
+  const { frequencyData, dominantFrequency, audioLevel, spectralCentroid } = analysisData;
   const noteName = frequencyToNoteName(dominantFrequency);
+  const timbreColor = getTimbreColor(spectralCentroid);
 
   return (
     <Card className="w-full h-full shadow-lg flex flex-col">
@@ -43,7 +63,7 @@ export default function AudioAnalysisDisplay({ analysisData, logSettings }: Audi
             </div>
             <div className="bg-muted/50 rounded-lg p-4 flex flex-col justify-center items-center col-span-2">
                 <p className="text-sm text-muted-foreground">Timbre</p>
-                 <div className="w-24 h-24 mt-2 rounded-full bg-gradient-to-br from-blue-400 to-purple-500" />
+                 <div className="w-24 h-24 mt-2 rounded-full transition-colors duration-200" style={{ backgroundColor: timbreColor }} />
             </div>
         </div>
       </CardContent>
