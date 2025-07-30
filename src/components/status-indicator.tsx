@@ -1,7 +1,7 @@
 "use client";
 
 import { Badge } from "@/components/ui/badge";
-import { Mic, MicOff, LoaderCircle, AlertCircle } from "lucide-react";
+import { Mic, MicOff, LoaderCircle, AlertCircle, Music } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type Status = 'idle' | 'requesting' | 'listening' | 'denied' | 'error';
@@ -13,17 +13,17 @@ type StatusIndicatorProps = {
 export default function StatusIndicator({ status }: StatusIndicatorProps) {
   const statusConfig = {
     idle: {
-      text: "Ready to Listen",
-      icon: <Mic className="h-4 w-4" />,
+      text: "Ready to Practice",
+      icon: <Music className="h-4 w-4" />,
       variant: "secondary" as const,
     },
     requesting: {
-      text: "Requesting Permission",
+      text: "Requesting Permissions",
       icon: <LoaderCircle className="h-4 w-4 animate-spin" />,
       variant: "secondary" as const,
     },
     listening: {
-      text: "Listening",
+      text: "Listening...",
       icon: <Mic className="h-4 w-4" />,
       variant: "default" as const,
     },

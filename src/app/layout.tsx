@@ -3,8 +3,8 @@ import './globals.css';
 import { Toaster } from "@/components/ui/toaster"
 
 export const metadata: Metadata = {
-  title: 'BeatMaster',
-  description: 'Visualize audio levels from your microphone.',
+  title: 'BeatTime',
+  description: 'Real-time rhythm training for musicians.',
 };
 
 export default function RootLayout({
