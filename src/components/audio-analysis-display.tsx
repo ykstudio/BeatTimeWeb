@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import AudioVisualizer from "@/components/audio-visualizer";
 import { type LogSettingsType } from "./log-settings";
 import { type AudioAnalysisData } from "@/hooks/use-audio-data";
+import VelocityMeter from "./velocity-meter";
 
 type AudioAnalysisDisplayProps = {
   analysisData: AudioAnalysisData;
@@ -20,13 +21,14 @@ export default function AudioAnalysisDisplay({ analysisData, logSettings }: Audi
         <CardTitle className="text-xl font-bold font-headline text-center">Audio Analysis</CardTitle>
       </CardHeader>
       <CardContent className="flex-grow grid grid-cols-1 md:grid-cols-2 gap-6 items-center justify-items-center">
-        <div className="w-full h-full flex flex-col items-center justify-center">
-          <AudioVisualizer audioData={frequencyData} />
-          {logSettings.velocity && (
-            <div className="mt-4 text-sm text-muted-foreground">
-              Audio Input Velocity: {audioLevel}
-            </div>
-          )}
+        <div className="w-full h-full flex flex-col items-center justify-around gap-4">
+            <AudioVisualizer audioData={frequencyData} />
+            <VelocityMeter audioLevel={audioLevel} />
+            {logSettings.velocity && (
+                <div className="mt-2 text-xs text-muted-foreground">
+                Raw Velocity: {audioLevel}
+                </div>
+            )}
         </div>
         <div className="w-full h-full grid grid-cols-2 grid-rows-2 gap-4 text-center">
             <div className="bg-muted/50 rounded-lg p-4 flex flex-col justify-center items-center">
