@@ -1,23 +1,25 @@
 "use client";
 
-import { useState, useRef, useCallback, ReactNode, useEffect } from 'react';
+import { useState, useRef, useCallback, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { Slider } from '@/components/ui/slider';
 import { Label } from '@/components/ui/label';
 import BeatIndicator from './beat-indicator';
-import { Button } from './ui/button';
-import { Mic, MicOff } from 'lucide-react';
 
 type Status = 'idle' | 'requesting' | 'listening' | 'denied' | 'error';
 
 interface MetronomeProps {
   onBeat: (beatNumber: number, time: number) => void;
   onBpmChange: (bpm: number) => void;
-  onTogglePractice: (isPlaying: boolean, start: (bpm: number) => Promise<AudioContext | null>, stop: () => void) => void;
+  isPlaying: boolean;
   status: Status;
 }
 
-const Metronome = ({ onBeat, onBpmChange, onTogglePractice, status }: MetronomeProps) => {
-  const [isPlaying, setIsPlaying] = useState(false);
+export interface MetronomeHandle {
+  start: (bpm: number) => Promise<AudioContext | null>;
+  stop: () => void;
+}
+
+const Metronome = forwardRef<MetronomeHandle, MetronomeProps>(({ onBeat, onBpmChange, isPlaying, status }, ref) => {
   const [bpm, setBpm] = useState(120);
   const [timeSignature] = useState(4);
   const [currentBeat, setCurrentBeat] = useState(0);
@@ -70,7 +72,6 @@ const Metronome = ({ onBeat, onBpmChange, onTogglePractice, status }: MetronomeP
     }
 
     audioContextRef.current = context;
-    setIsPlaying(true);
     beatCountRef.current = 0;
     nextNoteTimeRef.current = context.currentTime + 0.1; 
     
@@ -80,9 +81,8 @@ const Metronome = ({ onBeat, onBpmChange, onTogglePractice, status }: MetronomeP
   }, [isPlaying, scheduler]);
 
   const stop = useCallback(() => {
-    if (!isPlaying) return;
+    if (!isPlaying && !schedulerTimerRef.current) return;
 
-    setIsPlaying(false);
     if (schedulerTimerRef.current) {
       clearInterval(schedulerTimerRef.current);
       schedulerTimerRef.current = null;
@@ -91,6 +91,11 @@ const Metronome = ({ onBeat, onBpmChange, onTogglePractice, status }: MetronomeP
     onBeat(0, 0);
   }, [isPlaying, onBeat]);
 
+  useImperativeHandle(ref, () => ({
+      start,
+      stop
+  }));
+
   useEffect(() => {
     return () => {
       if (schedulerTimerRef.current) {
@@ -98,6 +103,12 @@ const Metronome = ({ onBeat, onBpmChange, onTogglePractice, status }: MetronomeP
       }
     };
   }, []);
+  
+  useEffect(() => {
+      if (!isPlaying) {
+          stop();
+      }
+  }, [isPlaying, stop])
 
   const handleBpmChange = (value: number[]) => {
     const newBpm = value[0];
@@ -105,40 +116,27 @@ const Metronome = ({ onBeat, onBpmChange, onTogglePractice, status }: MetronomeP
     onBpmChange(newBpm);
   }
 
-  const controls = (
-    <div className="w-full max-w-xs space-y-4">
-      <div className='space-y-2'>
-        <Label htmlFor="bpm-slider" className="text-center block">{`BPM: ${bpm}`}</Label>
-        <Slider
-          id="bpm-slider"
-          min={40}
-          max={200}
-          step={1}
-          value={[bpm]}
-          onValueChange={handleBpmChange}
-          disabled={isPlaying}
-        />
-      </div>
-    </div>
-  );
-
-  const beatIndicator = <BeatIndicator timeSignature={timeSignature} currentBeat={currentBeat} isPlaying={isPlaying} />;
-  
   return (
     <div className="w-full flex flex-col items-center gap-4">
-      {controls}
-      {beatIndicator}
-      <Button
-        onClick={() => onTogglePractice(isPlaying, start, stop)}
-        disabled={status === 'requesting'}
-        size="lg"
-        className="w-full sm:w-auto bg-accent text-accent-foreground hover:bg-accent/90 transition-all duration-300 transform active:scale-95"
-      >
-        {isPlaying ? <MicOff className="mr-2 h-5 w-5" /> : <Mic className="mr-2 h-5 w-5" />}
-        <span className="font-bold">{isPlaying ? 'Stop Practice' : 'Start Practice'}</span>
-      </Button>
+      <div className="w-full max-w-xs space-y-4">
+        <div className='space-y-2'>
+          <Label htmlFor="bpm-slider" className="text-center block">{`BPM: ${bpm}`}</Label>
+          <Slider
+            id="bpm-slider"
+            min={40}
+            max={200}
+            step={1}
+            value={[bpm]}
+            onValueChange={handleBpmChange}
+            disabled={isPlaying}
+          />
+        </div>
+      </div>
+      <BeatIndicator timeSignature={timeSignature} currentBeat={currentBeat} isPlaying={isPlaying} />
     </div>
   );
-};
+});
+
+Metronome.displayName = "Metronome";
 
 export default Metronome;

@@ -29,6 +29,7 @@ type View = 'practice' | 'summary';
 export default function Home() {
   const [status, setStatus] = useState<Status>('idle');
   const [view, setView] = useState<View>('practice');
+  const [metronomeIsPlaying, setMetronomeIsPlaying] = useState(false);
   const [frequencyData, setFrequencyData] = useState<Uint8Array>(new Uint8Array(0));
   
   const [score, setScore] = useState(0);
@@ -49,6 +50,7 @@ export default function Home() {
   const streamRef = useRef<MediaStream | null>(null);
   const animationFrameIdRef = useRef<number | null>(null);
   const onsetProcessorRef = useRef<AudioWorkletNode | null>(null);
+  const metronomeRef = useRef<{ start: (bpm: number) => Promise<AudioContext | null>, stop: () => void }>(null);
   
   const beatTimesRef = useRef<number[]>([]);
   const lastBeatIndexRef = useRef<number>(0);
@@ -116,10 +118,13 @@ export default function Home() {
             setHits(h => h + 1);
             setStreak(s => {
                 const newStreak = s + 1;
-                if (newStreak > bestStreak) {
-                    localStorage.setItem('bestStreak', newStreak.toString());
-                    setBestStreak(newStreak);
-                }
+                setBestStreak(bs => {
+                    if (newStreak > bs) {
+                        localStorage.setItem('bestStreak', newStreak.toString());
+                        return newStreak;
+                    }
+                    return bs;
+                });
                 return newStreak;
             });
             setLastHitTime(Date.now());
@@ -128,7 +133,7 @@ export default function Home() {
             setStreak(0);
         }
     }
-  }, [bestStreak]);
+  }, []);
 
   const startMicrophone = useCallback(async (context: AudioContext) => {
     cleanupMic();
@@ -204,6 +209,7 @@ export default function Home() {
   const saveSession = useCallback(() => {
     try {
       const finalAccuracy = hits + misses > 0 ? Math.round((hits / (hits + misses)) * 100) : 0;
+      const finalBestStreak = parseInt(localStorage.getItem('bestStreak') || '0', 10);
       const sessionData: PracticeSession = {
           id: new Date().toISOString(),
           date: Date.now(),
@@ -211,7 +217,7 @@ export default function Home() {
           score,
           hits,
           misses,
-          streak: Math.max(bestStreak, streak), // Save the highest streak for the session
+          streak: finalBestStreak,
           accuracy: finalAccuracy,
           timings
       };
@@ -233,11 +239,11 @@ export default function Home() {
         variant: "destructive",
       });
     }
-  }, [toast, hits, misses, score, streak, bestStreak, timings, currentBpm]);
+  }, [toast, hits, misses, score, timings, currentBpm]);
 
-  const handleTogglePractice = async (metronomeIsPlaying: boolean, startMetronome: (bpm: number) => Promise<AudioContext | null>, stopMetronome: () => void) => {
+  const handleTogglePractice = async () => {
     if (metronomeIsPlaying) {
-      stopMetronome();
+      metronomeRef.current?.stop();
       saveSession();
       cleanupMic();
       if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
@@ -245,27 +251,31 @@ export default function Home() {
         audioContextRef.current = null;
       }
       setStatus('idle');
+      setMetronomeIsPlaying(false);
       setView('summary');
     } else {
       resetPracticeState();
       setStatus('requesting');
-      const context = await startMetronome(currentBpm);
+      const context = await metronomeRef.current?.start(currentBpm);
       if (context) {
         audioContextRef.current = context;
         const micStarted = await startMicrophone(context);
         if (micStarted) {
           setStatus('listening');
+          setMetronomeIsPlaying(true);
         } else {
-          stopMetronome();
+          metronomeRef.current?.stop();
           cleanupMic();
           if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
             await audioContextRef.current.close();
             audioContextRef.current = null;
           }
            setStatus('idle');
+           setMetronomeIsPlaying(false);
         }
       } else {
         setStatus('error');
+        setMetronomeIsPlaying(false);
       }
     }
   };
@@ -284,8 +294,6 @@ export default function Home() {
       }
     };
   }, [cleanupMic]);
-  
-  const currentBestStreak = Math.max(bestStreak, streak);
 
   const PracticeView = () => (
     <>
@@ -299,14 +307,26 @@ export default function Home() {
     <CardContent className="flex flex-col items-center gap-4 pt-2">
       <AudioVisualizer frequencyData={frequencyData} />
       <StatusIndicator status={status} />
-      <ResultsDisplay score={score} accuracy={accuracy} streak={streak} bestStreak={currentBestStreak} lastHitTime={lastHitTime} />
+      <ResultsDisplay score={score} accuracy={accuracy} streak={streak} bestStreak={bestStreak} lastHitTime={lastHitTime} />
       <Metronome
+        ref={metronomeRef}
         onBeat={handleBeat}
         onBpmChange={setCurrentBpm}
-        onTogglePractice={handleTogglePractice}
+        isPlaying={metronomeIsPlaying}
         status={status}
       />
     </CardContent>
+    <CardFooter>
+      <Button
+        onClick={handleTogglePractice}
+        disabled={status === 'requesting'}
+        size="lg"
+        className="w-full sm:w-auto bg-accent text-accent-foreground hover:bg-accent/90 transition-all duration-300 transform active:scale-95"
+      >
+        {metronomeIsPlaying ? <MicOff className="mr-2 h-5 w-5" /> : <Mic className="mr-2 h-5 w-5" />}
+        <span className="font-bold">{metronomeIsPlaying ? 'Stop Practice' : 'Start Practice'}</span>
+      </Button>
+    </CardFooter>
     </>
   );
   
