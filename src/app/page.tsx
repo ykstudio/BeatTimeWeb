@@ -10,9 +10,10 @@ import { useToast } from '@/hooks/use-toast';
 import StatusIndicator from '@/components/status-indicator';
 import AudioVisualizer from '@/components/audio-visualizer';
 import ResultsDisplay from '@/components/results-display';
-import { useAudioData } from '@/hooks/use-audio-data';
+import { useAudioData, type AudioAnalysisData } from '@/hooks/use-audio-data';
 import { calculateAccuracy, TIMING_WINDOW } from '@/lib/audio';
 import LogSettings, { LogSettingsType } from '@/components/log-settings';
+import AudioAnalysisDisplay from '@/components/audio-analysis-display';
 
 export type PracticeSession = {
     score: number;
@@ -40,7 +41,7 @@ export default function Home() {
   const [hits, setHits] = useState(0);
   const [misses, setMisses] = useState(0);
   const [lastHitTime, setLastHitTime] = useState(0);
-  const [audioLevel, setAudioLevel] = useState(0);
+  
   const [logSettings, setLogSettings] = useState<LogSettingsType>({
     metronome: false,
     onsets: false,
@@ -52,7 +53,14 @@ export default function Home() {
   const metronomeRef = useRef<MetronomeHandle>(null);
   const micStreamRef = useRef<MediaStream | null>(null);
   const sourceNodeRef = useRef<MediaStreamAudioSourceNode | null>(null);
-  const { audioData, start: startVisualizer, stop: stopVisualizer } = useAudioData(setAudioLevel);
+  
+  const [audioAnalysisData, setAudioAnalysisData] = useState<AudioAnalysisData>({
+    audioLevel: 0,
+    frequencyData: new Uint8Array(0),
+    dominantFrequency: 0,
+  });
+
+  const { start: startVisualizer, stop: stopVisualizer } = useAudioData(setAudioAnalysisData);
   
   const beatTimesRef = useRef<number[]>([]);
   const lastBeatIndexRef = useRef(0);
@@ -74,11 +82,11 @@ export default function Home() {
     const timingDeltaMs = result.timing * 1000;
 
     if (result.hit) {
-      if (logSettings.hits) console.log(`Hit detected! Timing delta: ${timingDeltaMs.toFixed(2)}ms`);
-      setScore(s => s + 10);
-      setStreak(s => s + 1);
-      setHits(h => h + 1);
-      setLastHitTime(onsetTime);
+        if (logSettings.hits) console.log(`Hit detected! Timing delta: ${timingDeltaMs.toFixed(2)}ms`);
+        setScore(s => s + 10);
+        setStreak(s => s + 1);
+        setHits(h => h + 1);
+        setLastHitTime(onsetTime);
     } else {
         if (logSettings.hits && isFinite(timingDeltaMs)) {
             console.log(`Miss detected. Timing delta: ${timingDeltaMs.toFixed(2)}ms`);
@@ -140,10 +148,10 @@ export default function Home() {
         sourceNodeRef.current = context.createMediaStreamSource(stream);
         
         const analyserNode = context.createAnalyser();
-        analyserNode.fftSize = 256;
+        analyserNode.fftSize = 2048; // Increased for better frequency resolution
         sourceNodeRef.current.connect(analyserNode);
 
-        startVisualizer(analyserNode);
+        startVisualizer(analyserNode, context);
         
         if (metronomeRef.current) {
             metronomeRef.current.start(currentBpm, context);
@@ -180,13 +188,13 @@ export default function Home() {
       const currentTime = audioContextRef.current.currentTime;
       const cooldown = 0.2; // 200ms cooldown to prevent multiple detections
 
-      if (audioLevel >= ONSET_THRESHOLD && (currentTime - lastOnsetTimeRef.current > cooldown)) {
-        if(logSettings.onsets) console.log(`Onset detected at time: ${currentTime.toFixed(3)} with level: ${audioLevel}`);
+      if (audioAnalysisData.audioLevel >= ONSET_THRESHOLD && (currentTime - lastOnsetTimeRef.current > cooldown)) {
+        if(logSettings.onsets) console.log(`Onset detected at time: ${currentTime.toFixed(3)} with level: ${audioAnalysisData.audioLevel}`);
         lastOnsetTimeRef.current = currentTime;
         processHit(currentTime);
       }
     }
-  }, [audioLevel, metronomeIsPlaying, processHit, logSettings.onsets]);
+  }, [audioAnalysisData.audioLevel, metronomeIsPlaying, processHit, logSettings.onsets]);
 
   useEffect(() => {
     return () => {
@@ -220,51 +228,56 @@ export default function Home() {
   }, [streak, bestStreak]);
 
   return (
-    <main className="flex min-h-screen w-full flex-col items-center justify-center p-4">
-      <Card className="w-full max-w-md shadow-lg">
-        <CardHeader className="text-center relative">
-          <CardTitle className="text-3xl font-bold font-headline">BeatTime</CardTitle>
-          <CardDescription>Real-time rhythm training for musicians.</CardDescription>
-          <div className="absolute top-4 right-4">
-            <StatusIndicator status={status} />
-          </div>
-        </CardHeader>
-        <CardContent className="flex flex-col items-center gap-6 pt-2">
-          <AudioVisualizer audioData={audioData} />
-          {logSettings.velocity && (
-            <div className="text-sm text-muted-foreground">
-              Audio Input Velocity: {audioLevel}
+    <main className="flex min-h-screen w-full flex-col items-center justify-center p-4 gap-4">
+      <div className="w-full max-w-md h-[30vh]">
+        <Card className="w-full h-full shadow-lg flex flex-col">
+          <CardHeader className="text-center relative">
+            <CardTitle className="text-3xl font-bold font-headline">BeatTime</CardTitle>
+            <CardDescription>Real-time rhythm training for musicians.</CardDescription>
+            <div className="absolute top-4 right-4">
+              <StatusIndicator status={status} />
             </div>
-          )}
-          <ResultsDisplay
-            score={score}
-            accuracy={accuracy}
-            streak={streak}
-            bestStreak={bestStreak}
-            lastHitTime={lastHitTime}
-          />
-          <Metronome
-            ref={metronomeRef}
-            onBeat={handleBeat}
-            initialBpm={currentBpm}
-            onBpmChange={setCurrentBpm}
-            isPlaying={metronomeIsPlaying}
-            logSettings={logSettings}
-          />
-        </CardContent>
-        <CardFooter>
-          <Button
-            onClick={handleTogglePractice}
-            size="lg"
-            className="w-full bg-accent text-accent-foreground hover:bg-accent/90 transition-all duration-300 transform active:scale-95"
-            disabled={status === 'requesting'}
-          >
-            {metronomeIsPlaying ? <MicOff className="mr-2 h-5 w-5" /> : <Mic className="mr-2 h-5 w-5" />}
-            <span className="font-bold">{metronomeIsPlaying ? 'Stop Practice' : 'Start Practice'}</span>
-          </Button>
-        </CardFooter>
-      </Card>
+          </CardHeader>
+          <CardContent className="flex flex-col items-center gap-6 pt-2 flex-grow">
+            <ResultsDisplay
+              score={score}
+              accuracy={accuracy}
+              streak={streak}
+              bestStreak={bestStreak}
+              lastHitTime={lastHitTime}
+            />
+            <Metronome
+              ref={metronomeRef}
+              onBeat={handleBeat}
+              initialBpm={currentBpm}
+              onBpmChange={setCurrentBpm}
+              isPlaying={metronomeIsPlaying}
+              logSettings={logSettings}
+            />
+          </CardContent>
+          <CardFooter>
+            <Button
+              onClick={handleTogglePractice}
+              size="lg"
+              className="w-full bg-accent text-accent-foreground hover:bg-accent/90 transition-all duration-300 transform active:scale-95"
+              disabled={status === 'requesting'}
+            >
+              {metronomeIsPlaying ? <MicOff className="mr-2 h-5 w-5" /> : <Mic className="mr-2 h-5 w-5" />}
+              <span className="font-bold">{metronomeIsPlaying ? 'Stop Practice' : 'Start Practice'}</span>
+            </Button>
+          </CardFooter>
+        </Card>
+      </div>
+      
+      <div className="w-full max-w-4xl h-[60vh]">
+        <AudioAnalysisDisplay 
+          analysisData={audioAnalysisData}
+          logSettings={logSettings}
+        />
+      </div>
+
       <LogSettings settings={logSettings} onChange={setLogSettings} />
     </main>
   );
 }
+

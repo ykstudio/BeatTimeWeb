@@ -3,36 +3,56 @@
 
 import { useState, useRef, useCallback, Dispatch, SetStateAction } from 'react';
 
-export function useAudioData(setAudioLevel: Dispatch<SetStateAction<number>>) {
-  const [audioData, setAudioData] = useState(new Uint8Array(0));
+export type AudioAnalysisData = {
+  audioLevel: number;
+  frequencyData: Uint8Array;
+  dominantFrequency: number;
+};
+
+export function useAudioData(setAudioAnalysisData: Dispatch<SetStateAction<AudioAnalysisData>>) {
   const analyserNodeRef = useRef<AnalyserNode | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
   const animationFrameRef = useRef<number | null>(null);
 
   const draw = useCallback(() => {
-    if (analyserNodeRef.current) {
-      const bufferLength = analyserNodeRef.current.frequencyBinCount;
-      const dataArray = new Uint8Array(bufferLength);
-      analyserNodeRef.current.getByteFrequencyData(dataArray);
-      setAudioData(dataArray);
-
-      // Calculate the average volume and update the audio level state
+    if (analyserNodeRef.current && audioContextRef.current) {
+      const analyser = analyserNodeRef.current;
+      const bufferLength = analyser.frequencyBinCount;
+      const freqDataArray = new Uint8Array(bufferLength);
+      analyser.getByteFrequencyData(freqDataArray);
+      
+      // Calculate audio level (RMS)
       let sum = 0;
-      for (let i = 0; i < dataArray.length; i++) {
-        sum += dataArray[i];
+      for (let i = 0; i < freqDataArray.length; i++) {
+        sum += freqDataArray[i] * freqDataArray[i];
       }
-      const average = sum / dataArray.length;
+      const rms = Math.sqrt(sum / freqDataArray.length);
+      const scaledLevel = Math.round((rms / 128) * 20);
 
-      // Scale to 0-10 for display
-      const scaledLevel = Math.round((average / 128) * 10);
-      setAudioLevel(scaledLevel);
+      // Calculate dominant frequency
+      let maxVal = -1;
+      let maxIndex = -1;
+      for (let i = 0; i < bufferLength; i++) {
+        if (freqDataArray[i] > maxVal) {
+          maxVal = freqDataArray[i];
+          maxIndex = i;
+        }
+      }
+      const dominantFrequency = maxIndex * audioContextRef.current.sampleRate / analyser.fftSize;
 
+      setAudioAnalysisData({
+        audioLevel: scaledLevel,
+        frequencyData: freqDataArray,
+        dominantFrequency: dominantFrequency,
+      });
 
       animationFrameRef.current = requestAnimationFrame(draw);
     }
-  }, [setAudioLevel]);
+  }, [setAudioAnalysisData]);
 
-  const start = useCallback((analyserNode: AnalyserNode) => {
+  const start = useCallback((analyserNode: AnalyserNode, audioContext: AudioContext) => {
     analyserNodeRef.current = analyserNode;
+    audioContextRef.current = audioContext;
     draw();
   }, [draw]);
 
@@ -41,15 +61,17 @@ export function useAudioData(setAudioLevel: Dispatch<SetStateAction<number>>) {
       cancelAnimationFrame(animationFrameRef.current);
       animationFrameRef.current = null;
     }
-    if(analyserNodeRef.current) {
+    if (analyserNodeRef.current) {
         analyserNodeRef.current.disconnect();
         analyserNodeRef.current = null;
     }
-    setAudioData(new Uint8Array(0));
-    setAudioLevel(0);
-  }, [setAudioLevel]);
+    audioContextRef.current = null;
+    setAudioAnalysisData({
+        audioLevel: 0,
+        frequencyData: new Uint8Array(0),
+        dominantFrequency: 0
+    });
+  }, [setAudioAnalysisData]);
 
-  return { audioData, start, stop };
+  return { start, stop };
 }
-
-    

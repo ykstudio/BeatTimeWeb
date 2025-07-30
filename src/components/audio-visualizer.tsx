@@ -13,7 +13,7 @@ export default function AudioVisualizer({ audioData }: AudioVisualizerProps) {
   const bars = Array.from({ length: NUM_BARS }, (_, i) => {
     // The frequency data is logarithmic, so we sample it in a way that
     // represents lower frequencies more, which is more visually appealing.
-    const dataIndex = Math.floor(Math.pow(i / (NUM_BARS - 1), 2) * (audioData.length / 2));
+    const dataIndex = Math.floor(Math.pow((i + 1) / NUM_BARS, 2) * (audioData.length / 2.5));
     const value = audioData[dataIndex] || 0;
     const height = Math.max(1, (value / 255) * 100);
     return { height };
