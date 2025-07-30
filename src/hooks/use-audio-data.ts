@@ -40,5 +40,7 @@ export function useAudioData() {
     setAudioData(new Uint8Array(0)); // Clear the visualizer data
   }, []);
 
-  return { audioData, start, stop };
+  return { audioData, analyserNodeRef, start, stop };
 }
+
+    

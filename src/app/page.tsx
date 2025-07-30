@@ -10,7 +10,7 @@ import { useToast } from '@/hooks/use-toast';
 import StatusIndicator from '@/components/status-indicator';
 import AudioVisualizer from '@/components/audio-visualizer';
 import ResultsDisplay from '@/components/results-display';
-import { calculateAccuracy, TIMING_WINDOW } from '@/lib/audio';
+import { calculateAccuracy } from '@/lib/audio';
 import { useAudioData } from '@/hooks/use-audio-data';
 
 export type PracticeSession = {
@@ -45,7 +45,7 @@ export default function Home() {
   const metronomeRef = useRef<MetronomeHandle>(null);
   const micStreamRef = useRef<MediaStream | null>(null);
   const processorNodeRef = useRef<ScriptProcessorNode | null>(null);
-  const { audioData, start: startVisualizer, stop: stopVisualizer } = useAudioData();
+  const { audioData, start: startVisualizer, stop: stopVisualizer, analyserNodeRef } = useAudioData();
   
   const beatTimesRef = useRef<number[]>([]);
   const lastBeatIndexRef = useRef(0);
@@ -82,10 +82,10 @@ export default function Home() {
         setHits(prev => prev + 1);
         const newStreak = streak + 1;
         setStreak(newStreak);
+        console.log(`page.tsx: Hit! New streak: ${newStreak}`);
         setScore(prev => prev + 10); // Simple scoring
         setLastHitTime(now); // For animation
         lastBeatIndexRef.current = result.beatIndex;
-        console.log(`page.tsx: Hit! New streak: ${newStreak}`);
       } else {
         // Only count a miss if an audible onset was detected but it was off-beat.
         setMisses(prev => prev + 1);
@@ -111,13 +111,16 @@ export default function Home() {
     if (processorNodeRef.current) {
         processorNodeRef.current.disconnect();
         processorNodeRef.current = null;
+        console.log("page.tsx: Disconnecting ScriptProcessorNode.");
     }
     if (micStreamRef.current) {
         micStreamRef.current.getTracks().forEach(track => track.stop());
         micStreamRef.current = null;
+        console.log("page.tsx: Stopping microphone stream tracks.");
     }
 
     if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+      console.log(`page.tsx: Closing AudioContext. Current state: ${audioContextRef.current.state}`);
       audioContextRef.current.close().then(() => {
         console.log("page.tsx: AudioContext closed.");
         audioContextRef.current = null;
@@ -163,7 +166,16 @@ export default function Home() {
         const bufferSize = 1024;
         processorNodeRef.current = context.createScriptProcessor(bufferSize, 1, 1);
         processorNodeRef.current.onaudioprocess = (e) => processOnsets(e.inputBuffer);
-        source.connect(processorNodeRef.current);
+        
+        // --- Audio Graph Connection ---
+        if (analyserNodeRef.current) {
+            analyserNodeRef.current.connect(processorNodeRef.current);
+            console.log("page.tsx: AnalyserNode connected to ScriptProcessorNode.");
+        } else {
+            // Fallback if visualizer is somehow not ready
+            source.connect(processorNodeRef.current);
+        }
+        
         processorNodeRef.current.connect(context.destination); 
         console.log("page.tsx: ScriptProcessorNode connected to destination.");
 
@@ -187,7 +199,7 @@ export default function Home() {
       }
       stopPractice();
     }
-  }, [currentBpm, toast, processOnsets, stopPractice, startVisualizer]);
+  }, [currentBpm, toast, processOnsets, stopPractice, startVisualizer, analyserNodeRef]);
 
 
   const handleTogglePractice = async () => {
@@ -277,3 +289,4 @@ export default function Home() {
   );
 }
 
+    
