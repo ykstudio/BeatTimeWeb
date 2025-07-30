@@ -8,7 +8,6 @@ import Metronome, { type MetronomeHandle } from '@/components/metronome';
 import { Mic, MicOff } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import StatusIndicator from '@/components/status-indicator';
-import AudioVisualizer from '@/components/audio-visualizer';
 import ResultsDisplay from '@/components/results-display';
 import { useAudioData, type AudioAnalysisData } from '@/hooks/use-audio-data';
 import { calculateAccuracy, TIMING_WINDOW } from '@/lib/audio';
@@ -228,8 +227,8 @@ export default function Home() {
   }, [streak, bestStreak]);
 
   return (
-    <main className="flex min-h-screen w-full flex-col items-center justify-center p-4 gap-4">
-      <div className="w-full max-w-md h-[30vh]">
+    <main className="flex min-h-screen w-full flex-col lg:flex-row items-center justify-center p-4 gap-4">
+      <div className="w-full lg:w-1/3 max-w-md h-full">
         <Card className="w-full h-full shadow-lg flex flex-col">
           <CardHeader className="text-center relative">
             <CardTitle className="text-3xl font-bold font-headline">BeatTime</CardTitle>
@@ -269,7 +268,7 @@ export default function Home() {
         </Card>
       </div>
       
-      <div className="w-full max-w-4xl h-[60vh]">
+      <div className="w-full lg:w-2/3 h-full">
         <AudioAnalysisDisplay 
           analysisData={audioAnalysisData}
           logSettings={logSettings}
@@ -280,4 +279,3 @@ export default function Home() {
     </main>
   );
 }
-
