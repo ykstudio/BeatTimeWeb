@@ -67,6 +67,7 @@ const Metronome = forwardRef<MetronomeHandle, MetronomeProps>(({ onBeat, initial
     if (context.state === 'closed') {
         return;
     }
+    console.log(`metronome.tsx: Metronome.start called. BPM: ${currentBpm}, Context state: ${context.state}`);
     setBpm(currentBpm);
     onBpmChange(currentBpm);
     audioContextRef.current = context;
@@ -76,17 +77,21 @@ const Metronome = forwardRef<MetronomeHandle, MetronomeProps>(({ onBeat, initial
     if (schedulerTimerRef.current) {
       clearInterval(schedulerTimerRef.current);
     }
+    console.log("metronome.tsx: Starting scheduler interval.");
     schedulerTimerRef.current = window.setInterval(scheduler, 25);
   }, [onBpmChange, scheduler]);
 
   const stop = useCallback(() => {
+    console.log("metronome.tsx: Metronome.stop called");
     if (schedulerTimerRef.current) {
+      console.log("metronome.tsx: Clearing scheduler interval.");
       clearInterval(schedulerTimerRef.current);
       schedulerTimerRef.current = null;
     }
     setCurrentBeat(0);
     onBeat(0, 0); // Signal that metronome has stopped
     audioContextRef.current = null; 
+    console.log("metronome.tsx: Metronome stopped.");
   }, [onBeat]);
 
   useImperativeHandle(ref, () => ({

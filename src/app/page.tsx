@@ -24,7 +24,7 @@ export type PracticeSession = {
 
 type Status = 'idle' | 'requesting' | 'listening' | 'denied' | 'error' | 'stopped';
 
-const SENSITIVITY = 0.5; // Onset detection sensitivity
+const SENSITIVITY = 0.05; // Onset detection sensitivity
 const MIN_SILENCE_DURATION = 0.1; // seconds
 
 export default function Home() {
@@ -45,6 +45,7 @@ export default function Home() {
   const metronomeRef = useRef<MetronomeHandle>(null);
   const micStreamRef = useRef<MediaStream | null>(null);
   const processorNodeRef = useRef<ScriptProcessorNode | null>(null);
+  const sourceNodeRef = useRef<MediaStreamAudioSourceNode | null>(null);
   const { audioData, start: startVisualizer, stop: stopVisualizer, analyserNodeRef } = useAudioData();
   
   const beatTimesRef = useRef<number[]>([]);
@@ -55,7 +56,6 @@ export default function Home() {
   
   const handleBeat = (beatNumber: number, time: number) => {
     if (beatNumber > 0 && time > 0) {
-      // console.log(`page.tsx: Metronome beat ${beatNumber} at time ${time.toFixed(3)}`);
       beatTimesRef.current.push(time);
     }
   };
@@ -72,7 +72,7 @@ export default function Home() {
       return;
     }
     
-    if (rms > SENSITIVITY / 10) { // Adjust sensitivity mapping
+    if (rms > SENSITIVITY) { 
       lastOnsetRef.current = now;
       console.log(`page.tsx: Onset detected at time: ${now.toFixed(3)} with RMS: ${rms.toFixed(3)}`);
       
@@ -84,11 +84,10 @@ export default function Home() {
         const newStreak = streak + 1;
         setStreak(newStreak);
         console.log(`page.tsx: Hit! New streak: ${newStreak}`);
-        setScore(prev => prev + 10); // Simple scoring
-        setLastHitTime(now); // For animation
+        setScore(prev => prev + 10);
+        setLastHitTime(now);
         lastBeatIndexRef.current = result.beatIndex;
       } else {
-        // Only count a miss if an audible onset was detected but it was off-beat.
         setMisses(prev => prev + 1);
         if (streak > 0) {
             console.log(`page.tsx: Miss! Streak reset from ${streak} to 0.`);
@@ -110,24 +109,34 @@ export default function Home() {
     stopVisualizer();
 
     if (processorNodeRef.current) {
-        processorNodeRef.current.disconnect();
-        processorNodeRef.current.onaudioprocess = null;
-        processorNodeRef.current = null;
+      processorNodeRef.current.disconnect();
+      processorNodeRef.current.onaudioprocess = null;
+      processorNodeRef.current = null;
+      console.log("page.tsx: Disconnecting ScriptProcessorNode.");
     }
+    if(analyserNodeRef.current) {
+      analyserNodeRef.current.disconnect();
+    }
+    if (sourceNodeRef.current) {
+      sourceNodeRef.current.disconnect();
+    }
+
     if (micStreamRef.current) {
-        micStreamRef.current.getTracks().forEach(track => track.stop());
-        micStreamRef.current = null;
+      micStreamRef.current.getTracks().forEach(track => track.stop());
+      micStreamRef.current = null;
+      console.log("page.tsx: Stopping microphone stream tracks.");
     }
 
     if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
       console.log(`page.tsx: Closing AudioContext. Current state: ${audioContextRef.current.state}`);
       audioContextRef.current.close().then(() => {
+        console.log("page.tsx: AudioContext closed.");
         audioContextRef.current = null;
       });
     }
     
     setStatus('stopped');
-  }, [stopVisualizer]);
+  }, [stopVisualizer, analyserNodeRef]);
 
   const startPractice = useCallback(async () => {
     console.log("page.tsx: startPractice called");
@@ -149,27 +158,23 @@ export default function Home() {
         }
         console.log(`page.tsx: AudioContext state is '${context.state}'`);
 
-        // --- Microphone Setup ---
         console.log("page.tsx: Requesting microphone access...");
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         micStreamRef.current = stream;
-        const source = context.createMediaStreamSource(stream);
+        sourceNodeRef.current = context.createMediaStreamSource(stream);
         
-        // Setup Analyser for visualization
-        startVisualizer(context, source);
+        startVisualizer(context, sourceNodeRef.current);
         
-        // Setup ScriptProcessor for onset detection
         const bufferSize = 1024;
         processorNodeRef.current = context.createScriptProcessor(bufferSize, 1, 1);
         processorNodeRef.current.onaudioprocess = (e) => processOnsets(e.inputBuffer);
         
-        // --- Audio Graph Connection ---
         if (analyserNodeRef.current) {
-            source.connect(analyserNodeRef.current);
+            sourceNodeRef.current.connect(analyserNodeRef.current);
             analyserNodeRef.current.connect(processorNodeRef.current);
             console.log("page.tsx: Source -> Analyser -> Processor connection established.");
         } else {
-            source.connect(processorNodeRef.current);
+            sourceNodeRef.current.connect(processorNodeRef.current);
         }
         
         processorNodeRef.current.connect(context.destination); 
@@ -208,8 +213,8 @@ export default function Home() {
   };
 
   useEffect(() => {
-    // Cleanup on component unmount
     return () => {
+      console.log("page.tsx: Unmounting component, ensuring cleanup.");
       stopPractice();
     };
   }, [stopPractice]);
