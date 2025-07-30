@@ -6,6 +6,7 @@ import AudioVisualizer from "@/components/audio-visualizer";
 import { type LogSettingsType } from "./log-settings";
 import { type AudioAnalysisData } from "@/hooks/use-audio-data";
 import VelocityMeter from "./velocity-meter";
+import { frequencyToNoteName } from "@/lib/music";
 
 type AudioAnalysisDisplayProps = {
   analysisData: AudioAnalysisData;
@@ -14,6 +15,7 @@ type AudioAnalysisDisplayProps = {
 
 export default function AudioAnalysisDisplay({ analysisData, logSettings }: AudioAnalysisDisplayProps) {
   const { frequencyData, dominantFrequency, audioLevel } = analysisData;
+  const noteName = frequencyToNoteName(dominantFrequency);
 
   return (
     <Card className="w-full h-full shadow-lg flex flex-col">
@@ -37,7 +39,7 @@ export default function AudioAnalysisDisplay({ analysisData, logSettings }: Audi
             </div>
             <div className="bg-muted/50 rounded-lg p-4 flex flex-col justify-center items-center">
                 <p className="text-sm text-muted-foreground">Pitch / Note</p>
-                <p className="text-3xl font-bold">--</p>
+                <p className="text-3xl font-bold">{noteName}</p>
             </div>
             <div className="bg-muted/50 rounded-lg p-4 flex flex-col justify-center items-center col-span-2">
                 <p className="text-sm text-muted-foreground">Timbre</p>
