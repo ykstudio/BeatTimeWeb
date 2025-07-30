@@ -228,55 +228,58 @@ export default function Home() {
   }, [streak, bestStreak]);
 
   return (
-    <main className="flex min-h-screen w-full flex-col lg:flex-row items-start justify-center p-4 gap-4">
-      <div className="w-full lg:w-1/3 max-w-md">
-        <Card className="w-full h-full shadow-lg flex flex-col">
-          <CardHeader className="text-center relative">
-            <CardTitle className="text-3xl font-bold font-headline">BeatTime</CardTitle>
-            <CardDescription>Real-time rhythm training for musicians.</CardDescription>
-            <div className="absolute top-4 right-4">
-              <StatusIndicator status={status} />
-            </div>
-          </CardHeader>
-          <CardContent className="flex flex-col items-center gap-6 pt-2 flex-grow">
-            <ResultsDisplay
-              score={score}
-              accuracy={accuracy}
-              streak={streak}
-              bestStreak={bestStreak}
-              lastHitTime={lastHitTime}
-            />
-            <Metronome
-              ref={metronomeRef}
-              onBeat={handleBeat}
-              initialBpm={currentBpm}
-              onBpmChange={setCurrentBpm}
-              isPlaying={metronomeIsPlaying}
-              logSettings={logSettings}
-            />
-          </CardContent>
-          <CardFooter>
-            <Button
-              onClick={handleTogglePractice}
-              size="lg"
-              className="w-full bg-accent text-accent-foreground hover:bg-accent/90 transition-all duration-300 transform active:scale-95"
-              disabled={status === 'requesting'}
-            >
-              {metronomeIsPlaying ? <MicOff className="mr-2 h-5 w-5" /> : <Mic className="mr-2 h-5 w-5" />}
-              <span className="font-bold">{metronomeIsPlaying ? 'Stop Practice' : 'Start Practice'}</span>
-            </Button>
-          </CardFooter>
-        </Card>
+    <main className="container mx-auto p-4">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="lg:col-span-1">
+          <Card className="w-full h-full shadow-lg flex flex-col">
+            <CardHeader className="text-center relative">
+              <CardTitle className="text-3xl font-bold font-headline">BeatTime</CardTitle>
+              <CardDescription>Real-time rhythm training for musicians.</CardDescription>
+              <div className="absolute top-4 right-4">
+                <StatusIndicator status={status} />
+              </div>
+            </CardHeader>
+            <CardContent className="flex flex-col items-center gap-6 pt-2 flex-grow">
+              <ResultsDisplay
+                score={score}
+                accuracy={accuracy}
+                streak={streak}
+                bestStreak={bestStreak}
+                lastHitTime={lastHitTime}
+              />
+              <Metronome
+                ref={metronomeRef}
+                onBeat={handleBeat}
+                initialBpm={currentBpm}
+                onBpmChange={setCurrentBpm}
+                isPlaying={metronomeIsPlaying}
+                logSettings={logSettings}
+              />
+            </CardContent>
+            <CardFooter>
+              <Button
+                onClick={handleTogglePractice}
+                size="lg"
+                className="w-full bg-accent text-accent-foreground hover:bg-accent/90 transition-all duration-300 transform active:scale-95"
+                disabled={status === 'requesting'}
+              >
+                {metronomeIsPlaying ? <MicOff className="mr-2 h-5 w-5" /> : <Mic className="mr-2 h-5 w-5" />}
+                <span className="font-bold">{metronomeIsPlaying ? 'Stop Practice' : 'Start Practice'}</span>
+              </Button>
+            </CardFooter>
+          </Card>
+        </div>
+        
+        <div className="lg:col-span-2 flex flex-col gap-4">
+          <AudioAnalysisDisplay 
+            analysisData={audioAnalysisData}
+            logSettings={logSettings}
+          />
+          <div className="w-full flex justify-center">
+              <LogSettings settings={logSettings} onChange={setLogSettings} />
+          </div>
+        </div>
       </div>
-      
-      <div className="w-full lg:w-2/3 flex flex-col gap-4">
-        <AudioAnalysisDisplay 
-          analysisData={audioAnalysisData}
-          logSettings={logSettings}
-        />
-        <LogSettings settings={logSettings} onChange={setLogSettings} />
-      </div>
-
     </main>
   );
 }
