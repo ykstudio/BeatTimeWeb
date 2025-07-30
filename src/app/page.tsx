@@ -11,6 +11,7 @@ import StatusIndicator from '@/components/status-indicator';
 import AudioVisualizer from '@/components/audio-visualizer';
 import ResultsDisplay from '@/components/results-display';
 import { useAudioData } from '@/hooks/use-audio-data';
+import { calculateAccuracy, TIMING_WINDOW } from '@/lib/audio';
 
 export type PracticeSession = {
     score: number;
@@ -22,6 +23,8 @@ export type PracticeSession = {
 };
 
 type Status = 'idle' | 'requesting' | 'listening' | 'denied' | 'error' | 'stopped';
+
+const ONSET_THRESHOLD = 3; // Audio level threshold to trigger a note onset
 
 export default function Home() {
   const [metronomeIsPlaying, setMetronomeIsPlaying] = useState(false);
@@ -42,10 +45,11 @@ export default function Home() {
   const metronomeRef = useRef<MetronomeHandle>(null);
   const micStreamRef = useRef<MediaStream | null>(null);
   const sourceNodeRef = useRef<MediaStreamAudioSourceNode | null>(null);
-  const { audioData, start: startVisualizer, stop: stopVisualizer, analyserNodeRef } = useAudioData(setAudioLevel);
+  const { audioData, start: startVisualizer, stop: stopVisualizer } = useAudioData(setAudioLevel);
   
   const beatTimesRef = useRef<number[]>([]);
   const lastBeatIndexRef = useRef(0);
+  const lastOnsetTimeRef = useRef(0);
 
   const { toast } = useToast();
   
@@ -54,6 +58,25 @@ export default function Home() {
       beatTimesRef.current.push(time);
     }
   };
+
+  const processHit = useCallback((onsetTime: number) => {
+    const result = calculateAccuracy(onsetTime, beatTimesRef.current, lastBeatIndexRef.current);
+    const timingDeltaMs = result.timing * 1000;
+
+    if (result.hit) {
+      console.log(`Hit detected! Timing delta: ${timingDeltaMs.toFixed(2)}ms`);
+      setScore(s => s + 10);
+      setStreak(s => s + 1);
+      setHits(h => h + 1);
+      setLastHitTime(onsetTime); // For animation
+    } else {
+      console.log(`Miss detected. Timing delta: ${timingDeltaMs.toFixed(2)}ms`);
+      setStreak(0);
+      setMisses(m => m + 1);
+    }
+    lastBeatIndexRef.current = result.beatIndex;
+
+  }, []);
 
   const stopPractice = useCallback(() => {
     console.log("page.tsx: stopPractice called");
@@ -65,22 +88,17 @@ export default function Home() {
     
     stopVisualizer();
 
-    if(analyserNodeRef.current) {
-      analyserNodeRef.current.disconnect();
-    }
     if (sourceNodeRef.current) {
       sourceNodeRef.current.disconnect();
+      sourceNodeRef.current = null;
     }
-    sourceNodeRef.current = null;
 
     if (micStreamRef.current) {
       micStreamRef.current.getTracks().forEach(track => track.stop());
       micStreamRef.current = null;
-      console.log("page.tsx: Stopping microphone stream tracks.");
     }
 
     if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
-      console.log(`page.tsx: Closing AudioContext. Current state: ${audioContextRef.current.state}`);
       audioContextRef.current.close().then(() => {
         console.log("page.tsx: AudioContext closed.");
         audioContextRef.current = null;
@@ -88,7 +106,7 @@ export default function Home() {
     }
     
     setStatus('stopped');
-  }, [stopVisualizer, analyserNodeRef]);
+  }, [stopVisualizer]);
 
   const startPractice = useCallback(async () => {
     console.log("page.tsx: startPractice called");
@@ -108,14 +126,17 @@ export default function Home() {
         if (context.state === 'suspended') {
             await context.resume();
         }
-        console.log(`page.tsx: AudioContext state is '${context.state}'`);
 
         console.log("page.tsx: Requesting microphone access...");
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         micStreamRef.current = stream;
         sourceNodeRef.current = context.createMediaStreamSource(stream);
         
-        startVisualizer(context, sourceNodeRef.current);
+        const analyserNode = context.createAnalyser();
+        analyserNode.fftSize = 256;
+        sourceNodeRef.current.connect(analyserNode);
+
+        startVisualizer(analyserNode);
         
         console.log("page.tsx: Microphone setup complete.");
 
@@ -141,7 +162,6 @@ export default function Home() {
 
 
   const handleTogglePractice = async () => {
-    console.log(`page.tsx: handleTogglePractice called. metronomeIsPlaying: ${metronomeIsPlaying}`);
     if (metronomeIsPlaying) {
       stopPractice();
     } else {
@@ -149,9 +169,22 @@ export default function Home() {
     }
   };
 
+  // Onset detection using audioLevel
+  useEffect(() => {
+    if (metronomeIsPlaying && audioContextRef.current) {
+      const currentTime = audioContextRef.current.currentTime;
+      // Cooldown to prevent multiple detections for a single sound
+      const cooldown = 0.2; // 200ms
+
+      if (audioLevel >= ONSET_THRESHOLD && (currentTime - lastOnsetTimeRef.current > cooldown)) {
+        lastOnsetTimeRef.current = currentTime;
+        processHit(currentTime);
+      }
+    }
+  }, [audioLevel, metronomeIsPlaying, processHit]);
+
   useEffect(() => {
     return () => {
-      console.log("page.tsx: Unmounting component, ensuring cleanup.");
       if (micStreamRef.current || audioContextRef.current) {
           stopPractice();
       }
@@ -227,3 +260,5 @@ export default function Home() {
     </main>
   );
 }
+
+    

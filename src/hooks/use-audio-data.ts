@@ -16,9 +16,14 @@ export function useAudioData(setAudioLevel: Dispatch<SetStateAction<number>>) {
       setAudioData(dataArray);
 
       // Calculate the average volume and update the audio level state
-      const level = dataArray.reduce((acc, val) => acc + val, 0) / dataArray.length;
+      let sum = 0;
+      for (let i = 0; i < dataArray.length; i++) {
+        sum += dataArray[i];
+      }
+      const average = sum / dataArray.length;
+
       // Scale to 0-10 for display
-      const scaledLevel = Math.round((level / 255) * 10);
+      const scaledLevel = Math.round((average / 128) * 10);
       setAudioLevel(scaledLevel);
 
 
@@ -26,11 +31,8 @@ export function useAudioData(setAudioLevel: Dispatch<SetStateAction<number>>) {
     }
   }, [setAudioLevel]);
 
-  const start = useCallback((context: AudioContext, source: MediaStreamAudioSourceNode) => {
-    if(context.state === 'closed') return;
-    analyserNodeRef.current = context.createAnalyser();
-    analyserNodeRef.current.fftSize = 256; 
-    source.connect(analyserNodeRef.current);
+  const start = useCallback((analyserNode: AnalyserNode) => {
+    analyserNodeRef.current = analyserNode;
     draw();
   }, [draw]);
 
@@ -47,5 +49,7 @@ export function useAudioData(setAudioLevel: Dispatch<SetStateAction<number>>) {
     setAudioLevel(0);
   }, [setAudioLevel]);
 
-  return { audioData, analyserNodeRef, start, stop };
+  return { audioData, start, stop };
 }
+
+    
