@@ -55,7 +55,7 @@ export default function Home() {
   
   const handleBeat = (beatNumber: number, time: number) => {
     if (beatNumber > 0 && time > 0) {
-      console.log(`page.tsx: Metronome beat ${beatNumber} at time ${time.toFixed(3)}`);
+      // console.log(`page.tsx: Metronome beat ${beatNumber} at time ${time.toFixed(3)}`);
       beatTimesRef.current.push(time);
     }
   };
@@ -80,7 +80,6 @@ export default function Home() {
       console.log("page.tsx: Accuracy calculation result:", result);
 
       if (result.hit) {
-        console.log("page.tsx: Hit registered!");
         setHits(prev => prev + 1);
         const newStreak = streak + 1;
         setStreak(newStreak);
@@ -90,7 +89,6 @@ export default function Home() {
         lastBeatIndexRef.current = result.beatIndex;
       } else {
         // Only count a miss if an audible onset was detected but it was off-beat.
-        console.log("page.tsx: Miss registered!");
         setMisses(prev => prev + 1);
         if (streak > 0) {
             console.log(`page.tsx: Miss! Streak reset from ${streak} to 0.`);
@@ -115,18 +113,15 @@ export default function Home() {
         processorNodeRef.current.disconnect();
         processorNodeRef.current.onaudioprocess = null;
         processorNodeRef.current = null;
-        console.log("page.tsx: Disconnecting ScriptProcessorNode.");
     }
     if (micStreamRef.current) {
         micStreamRef.current.getTracks().forEach(track => track.stop());
         micStreamRef.current = null;
-        console.log("page.tsx: Stopping microphone stream tracks.");
     }
 
     if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
       console.log(`page.tsx: Closing AudioContext. Current state: ${audioContextRef.current.state}`);
       audioContextRef.current.close().then(() => {
-        console.log("page.tsx: AudioContext closed.");
         audioContextRef.current = null;
       });
     }
@@ -142,7 +137,6 @@ export default function Home() {
     setScore(0);
     setAccuracy(0);
     setStreak(0);
-    setBestStreak(0);
     setHits(0);
     setMisses(0);
 
@@ -171,8 +165,9 @@ export default function Home() {
         
         // --- Audio Graph Connection ---
         if (analyserNodeRef.current) {
+            source.connect(analyserNodeRef.current);
             analyserNodeRef.current.connect(processorNodeRef.current);
-            console.log("page.tsx: AnalyserNode connected to ScriptProcessorNode.");
+            console.log("page.tsx: Source -> Analyser -> Processor connection established.");
         } else {
             source.connect(processorNodeRef.current);
         }
@@ -215,7 +210,6 @@ export default function Home() {
   useEffect(() => {
     // Cleanup on component unmount
     return () => {
-      console.log("page.tsx: Unmounting component, ensuring cleanup.");
       stopPractice();
     };
   }, [stopPractice]);
@@ -224,7 +218,6 @@ export default function Home() {
     if (hits > 0 || misses > 0) {
         const newAccuracy = Math.round((hits / (hits + misses)) * 100);
         setAccuracy(newAccuracy);
-        console.log(`page.tsx: Accuracy updated: ${newAccuracy}% (${hits} hits, ${misses} misses)`);
     } else {
         setAccuracy(0);
     }

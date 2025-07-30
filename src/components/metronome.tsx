@@ -30,7 +30,6 @@ const Metronome = forwardRef<MetronomeHandle, MetronomeProps>(({ onBeat, initial
 
   const scheduleBeat = useCallback((beatNumber: number, time: number) => {
     if (!audioContextRef.current) {
-        console.error("metronome.tsx: scheduleBeat called with no audioContextRef.current");
         return;
     };
     
@@ -53,7 +52,6 @@ const Metronome = forwardRef<MetronomeHandle, MetronomeProps>(({ onBeat, initial
     }
     
     while (nextNoteTimeRef.current < audioContextRef.current.currentTime + 0.1) {
-      console.log(`metronome.tsx: Scheduling beat ${beatCountRef.current + 1}`);
       const beatInBar = (beatCountRef.current % timeSignature) + 1;
       onBeat(beatInBar, nextNoteTimeRef.current);
       setCurrentBeat(beatInBar);
@@ -66,9 +64,7 @@ const Metronome = forwardRef<MetronomeHandle, MetronomeProps>(({ onBeat, initial
   }, [bpm, onBeat, scheduleBeat, timeSignature]);
 
   const start = useCallback((currentBpm: number, context: AudioContext) => {
-    console.log(`metronome.tsx: Metronome.start called. BPM: ${currentBpm}, Context state: ${context.state}`);
     if (context.state === 'closed') {
-        console.error("metronome.tsx: Cannot start, received a closed AudioContext.");
         return;
     }
     setBpm(currentBpm);
@@ -80,21 +76,17 @@ const Metronome = forwardRef<MetronomeHandle, MetronomeProps>(({ onBeat, initial
     if (schedulerTimerRef.current) {
       clearInterval(schedulerTimerRef.current);
     }
-    console.log("metronome.tsx: Starting scheduler interval.");
     schedulerTimerRef.current = window.setInterval(scheduler, 25);
   }, [onBpmChange, scheduler]);
 
   const stop = useCallback(() => {
-    console.log("metronome.tsx: Metronome.stop called");
     if (schedulerTimerRef.current) {
-      console.log("metronome.tsx: Clearing scheduler interval.");
       clearInterval(schedulerTimerRef.current);
       schedulerTimerRef.current = null;
     }
     setCurrentBeat(0);
     onBeat(0, 0); // Signal that metronome has stopped
     audioContextRef.current = null; 
-    console.log("metronome.tsx: Metronome stopped.");
   }, [onBeat]);
 
   useImperativeHandle(ref, () => ({
