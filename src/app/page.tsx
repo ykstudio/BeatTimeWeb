@@ -114,7 +114,7 @@ export default function Home() {
   }, []);
   
   const handleOnset = useCallback((onsetTime: number) => {
-    if (!audioContextRef.current) return;
+    if (!metronomeIsPlaying || !audioContextRef.current) return;
     
     const { hit, timing, beatIndex } = calculateAccuracy(onsetTime, beatTimesRef.current, lastBeatIndexRef.current);
     
@@ -142,7 +142,7 @@ export default function Home() {
             setStreak(0);
         }
     }
-  }, []);
+  }, [metronomeIsPlaying]);
 
   const startMicrophone = useCallback(async (context: AudioContext) => {
     try {
@@ -178,7 +178,7 @@ export default function Home() {
 
       source.connect(analyser);
       source.connect(onsetProcessor);
-      onsetProcessor.connect(context.destination); // Connect to destination to keep worklet alive
+      onsetProcessor.connect(context.destination); 
 
       const animate = () => {
         if (analyserRef.current) {
@@ -233,7 +233,7 @@ export default function Home() {
       setSession(sessionData);
 
       const history: PracticeSession[] = JSON.parse(localStorage.getItem('practiceHistory') || '[]');
-      const newHistory = [sessionData, ...history].slice(0, 10); // Keep last 10 sessions
+      const newHistory = [sessionData, ...history].slice(0, 10);
       localStorage.setItem('practiceHistory', JSON.stringify(newHistory));
       
       const bestScore = parseInt(localStorage.getItem('bestScore') || '0', 10);
@@ -267,7 +267,6 @@ export default function Home() {
     setView('practice');
     setStatus('requesting');
     
-    // Create and resume the AudioContext here
     const context = new (window.AudioContext || (window as any).webkitAudioContext)();
     if (context.state === 'suspended') {
       await context.resume();
@@ -282,7 +281,7 @@ export default function Home() {
       setMetronomeIsPlaying(true);
     } else {
       await cleanupAudioContext();
-       setStatus('idle');
+      setStatus('idle');
     }
   }, [resetPracticeState, startMicrophone, currentBpm, cleanupAudioContext]);
   
