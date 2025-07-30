@@ -80,11 +80,11 @@ export default function Home() {
       setHits(h => h + 1);
       setLastHitTime(onsetTime);
     } else {
-      if (logSettings.hits && isFinite(timingDeltaMs)) {
-        console.log(`Miss detected. Timing delta: ${timingDeltaMs.toFixed(2)}ms`);
-      }
-      setStreak(0);
-      setMisses(m => m + 1);
+        if (logSettings.hits && isFinite(timingDeltaMs)) {
+            console.log(`Miss detected. Timing delta: ${timingDeltaMs.toFixed(2)}ms`);
+        }
+        setStreak(0);
+        setMisses(m => m + 1);
     }
     lastBeatIndexRef.current = result.beatIndex;
 
@@ -176,9 +176,6 @@ export default function Home() {
 
   // Onset detection using audioLevel
   useEffect(() => {
-    if (logSettings.velocity) {
-      console.log(`Audio Level: ${audioLevel}`);
-    }
     if (metronomeIsPlaying && audioContextRef.current) {
       const currentTime = audioContextRef.current.currentTime;
       const cooldown = 0.2; // 200ms cooldown to prevent multiple detections
@@ -189,7 +186,7 @@ export default function Home() {
         processHit(currentTime);
       }
     }
-  }, [audioLevel, metronomeIsPlaying, processHit, logSettings.onsets, logSettings.velocity]);
+  }, [audioLevel, metronomeIsPlaying, processHit, logSettings.onsets]);
 
   useEffect(() => {
     return () => {
@@ -234,6 +231,11 @@ export default function Home() {
         </CardHeader>
         <CardContent className="flex flex-col items-center gap-6 pt-2">
           <AudioVisualizer audioData={audioData} />
+          {logSettings.velocity && (
+            <div className="text-sm text-muted-foreground">
+              Audio Input Velocity: {audioLevel}
+            </div>
+          )}
           <ResultsDisplay
             score={score}
             accuracy={accuracy}
