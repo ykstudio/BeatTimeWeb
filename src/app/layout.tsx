@@ -5,7 +5,9 @@ import { Toaster } from "@/components/ui/toaster"
 export const metadata: Metadata = {
   title: 'BeatTime',
   description: 'Real-time rhythm training for musicians.',
-  icons: {}, // Explicitly disable favicon generation to prevent build errors
+  icons: {
+    icon: '/favicon.ico',
+  },
 };
 
 export default function RootLayout({
