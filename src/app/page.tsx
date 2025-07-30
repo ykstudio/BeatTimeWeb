@@ -70,7 +70,9 @@ export default function Home() {
       setHits(h => h + 1);
       setLastHitTime(onsetTime); // For animation
     } else {
-      console.log(`Miss detected. Timing delta: ${timingDeltaMs.toFixed(2)}ms`);
+       if (isFinite(timingDeltaMs)) {
+        console.log(`Miss detected. Timing delta: ${timingDeltaMs.toFixed(2)}ms`);
+      }
       setStreak(0);
       setMisses(m => m + 1);
     }
@@ -224,12 +226,8 @@ export default function Home() {
             <StatusIndicator status={status} />
           </div>
         </CardHeader>
-        <CardContent className="flex flex-col items-center gap-4 pt-2">
+        <CardContent className="flex flex-col items-center gap-6 pt-2">
           <AudioVisualizer audioData={audioData} />
-          <div className="text-center">
-            <p className="text-sm text-muted-foreground">Audio Input Velocity</p>
-            <p className="text-lg font-bold">{audioLevel}</p>
-          </div>
           <ResultsDisplay
             score={score}
             accuracy={accuracy}
@@ -260,5 +258,3 @@ export default function Home() {
     </main>
   );
 }
-
-    
