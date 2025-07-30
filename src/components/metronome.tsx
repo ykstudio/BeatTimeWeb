@@ -4,20 +4,19 @@ import { useState, useRef, useCallback, ReactNode, useEffect } from 'react';
 import { Slider } from '@/components/ui/slider';
 import { Label } from '@/components/ui/label';
 import BeatIndicator from './beat-indicator';
+import { Button } from './ui/button';
+import { Mic, MicOff } from 'lucide-react';
+
+type Status = 'idle' | 'requesting' | 'listening' | 'denied' | 'error';
 
 interface MetronomeProps {
   onBeat: (beatNumber: number, time: number) => void;
   onBpmChange: (bpm: number) => void;
-  render: (props: {
-    isPlaying: boolean;
-    start: (bpm: number) => Promise<AudioContext | null>;
-    stop: () => void;
-    controls: ReactNode;
-    beatIndicator: ReactNode;
-  }) => ReactNode;
+  onTogglePractice: (isPlaying: boolean, start: (bpm: number) => Promise<AudioContext | null>, stop: () => void) => void;
+  status: Status;
 }
 
-const Metronome = ({ onBeat, onBpmChange, render }: MetronomeProps) => {
+const Metronome = ({ onBeat, onBpmChange, onTogglePractice, status }: MetronomeProps) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [bpm, setBpm] = useState(120);
   const [timeSignature] = useState(4);
@@ -125,7 +124,21 @@ const Metronome = ({ onBeat, onBpmChange, render }: MetronomeProps) => {
 
   const beatIndicator = <BeatIndicator timeSignature={timeSignature} currentBeat={currentBeat} isPlaying={isPlaying} />;
   
-  return render({ isPlaying, start, stop, controls, beatIndicator });
+  return (
+    <div className="w-full flex flex-col items-center gap-4">
+      {controls}
+      {beatIndicator}
+      <Button
+        onClick={() => onTogglePractice(isPlaying, start, stop)}
+        disabled={status === 'requesting'}
+        size="lg"
+        className="w-full sm:w-auto bg-accent text-accent-foreground hover:bg-accent/90 transition-all duration-300 transform active:scale-95"
+      >
+        {isPlaying ? <MicOff className="mr-2 h-5 w-5" /> : <Mic className="mr-2 h-5 w-5" />}
+        <span className="font-bold">{isPlaying ? 'Stop Practice' : 'Start Practice'}</span>
+      </Button>
+    </div>
+  );
 };
 
 export default Metronome;

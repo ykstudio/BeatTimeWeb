@@ -58,6 +58,14 @@ export default function Home() {
   useEffect(() => {
     setBestStreak(parseInt(localStorage.getItem('bestStreak') || '0', 10));
   }, []);
+  
+  useEffect(() => {
+    if(hits + misses > 0) {
+        setAccuracy(Math.round((hits / (hits + misses)) * 100));
+    } else {
+        setAccuracy(0);
+    }
+  }, [hits, misses]);
 
   const resetPracticeState = () => {
     setScore(0);
@@ -108,7 +116,7 @@ export default function Home() {
             setHits(h => h + 1);
             setStreak(s => {
                 const newStreak = s + 1;
-                if (newStreak > (parseInt(localStorage.getItem('bestStreak') || '0', 10))) {
+                if (newStreak > bestStreak) {
                     localStorage.setItem('bestStreak', newStreak.toString());
                     setBestStreak(newStreak);
                 }
@@ -120,7 +128,7 @@ export default function Home() {
             setStreak(0);
         }
     }
-  }, []);
+  }, [bestStreak]);
 
   const startMicrophone = useCallback(async (context: AudioContext) => {
     cleanupMic();
@@ -269,14 +277,6 @@ export default function Home() {
   }
 
   useEffect(() => {
-    if(hits + misses > 0) {
-        setAccuracy(Math.round((hits / (hits + misses)) * 100));
-    } else {
-        setAccuracy(0);
-    }
-  }, [hits, misses]);
-
-  useEffect(() => {
     return () => {
       cleanupMic();
        if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
@@ -303,22 +303,9 @@ export default function Home() {
       <Metronome
         onBeat={handleBeat}
         onBpmChange={setCurrentBpm}
-        render={({ isPlaying, start, stop, controls, beatIndicator }) => (
-          <div className="w-full flex flex-col items-center gap-4">
-            {controls}
-            {beatIndicator}
-            <Button
-              onClick={() => handleTogglePractice(isPlaying, start, stop)}
-              disabled={status === 'requesting'}
-              size="lg"
-              className="w-full sm:w-auto bg-accent text-accent-foreground hover:bg-accent/90 transition-all duration-300 transform active:scale-95"
-            >
-              {isPlaying ? <MicOff className="mr-2 h-5 w-5" /> : <Mic className="mr-2 h-5 w-5" />}
-              <span className="font-bold">{isPlaying ? 'Stop Practice' : 'Start Practice'}</span>
-            </Button>
-          </div>
-        )}
-       />
+        onTogglePractice={handleTogglePractice}
+        status={status}
+      />
     </CardContent>
     </>
   );
