@@ -54,7 +54,6 @@ export default function Home() {
   const { toast } = useToast();
   
   const handleBeat = (beatNumber: number, time: number) => {
-    if (!audioContextRef.current) return;
     if (beatNumber > 0 && time > 0) {
       console.log(`page.tsx: Metronome beat ${beatNumber} at time ${time.toFixed(3)}`);
       beatTimesRef.current.push(time);
@@ -81,17 +80,22 @@ export default function Home() {
 
       if (result.hit) {
         setHits(prev => prev + 1);
-        setStreak(prev => prev + 1);
+        const newStreak = streak + 1;
+        setStreak(newStreak);
         setScore(prev => prev + 10); // Simple scoring
         setLastHitTime(now); // For animation
         lastBeatIndexRef.current = result.beatIndex;
+        console.log(`page.tsx: Hit! New streak: ${newStreak}`);
       } else {
         // Only count a miss if an audible onset was detected but it was off-beat.
         setMisses(prev => prev + 1);
+        if (streak > 0) {
+            console.log(`page.tsx: Miss! Streak reset from ${streak} to 0.`);
+        }
         setStreak(0);
       }
     }
-  }, [metronomeIsPlaying, hits, misses, score, streak]);
+  }, [metronomeIsPlaying, beatTimesRef, lastBeatIndexRef, hits, misses, score, streak]);
 
 
   const stopPractice = useCallback(() => {
@@ -99,31 +103,25 @@ export default function Home() {
     
     setMetronomeIsPlaying(false);
     if (metronomeRef.current) {
-        console.log("page.tsx: Calling metronomeRef.current.stop()");
         metronomeRef.current.stop();
     }
     
     stopVisualizer();
 
     if (processorNodeRef.current) {
-        console.log("page.tsx: Disconnecting ScriptProcessorNode.");
         processorNodeRef.current.disconnect();
         processorNodeRef.current = null;
     }
     if (micStreamRef.current) {
-        console.log("page.tsx: Stopping microphone stream tracks.");
         micStreamRef.current.getTracks().forEach(track => track.stop());
         micStreamRef.current = null;
     }
 
     if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
-      console.log(`page.tsx: Closing AudioContext. Current state: ${audioContextRef.current.state}`);
       audioContextRef.current.close().then(() => {
         console.log("page.tsx: AudioContext closed.");
         audioContextRef.current = null;
       });
-    } else {
-      console.log("page.tsx: No active AudioContext to close.");
     }
     
     if (streak > bestStreak) {
@@ -149,9 +147,7 @@ export default function Home() {
         console.log(`page.tsx: AudioContext state is '${context.state}'`);
 
         if (context.state === 'suspended') {
-            console.log("page.tsx: Resuming AudioContext...");
             await context.resume();
-            console.log(`page.tsx: AudioContext resumed. New state is '${context.state}'`);
         }
 
         // --- Microphone Setup ---
@@ -168,18 +164,16 @@ export default function Home() {
         processorNodeRef.current = context.createScriptProcessor(bufferSize, 1, 1);
         processorNodeRef.current.onaudioprocess = (e) => processOnsets(e.inputBuffer);
         source.connect(processorNodeRef.current);
-        processorNodeRef.current.connect(context.destination); // Connect to destination to keep it running
+        processorNodeRef.current.connect(context.destination); 
         console.log("page.tsx: ScriptProcessorNode connected to destination.");
 
         console.log("page.tsx: Microphone setup complete.");
 
         if (metronomeRef.current) {
-            console.log("page.tsx: Calling metronomeRef.current.start()");
             metronomeRef.current.start(currentBpm, context);
             setMetronomeIsPlaying(true);
             setStatus('listening');
         } else {
-            console.error("page.tsx: metronomeRef.current is null!");
             throw new Error("Metronome reference not found.");
         }
     } catch (e) {
@@ -217,6 +211,7 @@ export default function Home() {
     if (hits > 0 || misses > 0) {
         const newAccuracy = Math.round((hits / (hits + misses)) * 100);
         setAccuracy(newAccuracy);
+        console.log(`page.tsx: Accuracy updated: ${newAccuracy}% (${hits} hits, ${misses} misses)`);
     } else {
         setAccuracy(0);
     }
@@ -281,3 +276,4 @@ export default function Home() {
     </main>
   );
 }
+
