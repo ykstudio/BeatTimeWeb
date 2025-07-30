@@ -227,8 +227,8 @@ export default function Home() {
   }, [streak, bestStreak]);
 
   return (
-    <main className="flex min-h-screen w-full flex-col lg:flex-row items-center justify-center p-4 gap-4">
-      <div className="w-full lg:w-1/3 max-w-md h-full">
+    <main className="flex min-h-screen w-full flex-col lg:flex-row items-start justify-center p-4 gap-4">
+      <div className="w-full lg:w-1/3 max-w-md">
         <Card className="w-full h-full shadow-lg flex flex-col">
           <CardHeader className="text-center relative">
             <CardTitle className="text-3xl font-bold font-headline">BeatTime</CardTitle>
@@ -268,14 +268,14 @@ export default function Home() {
         </Card>
       </div>
       
-      <div className="w-full lg:w-2/3 h-full">
+      <div className="w-full lg:w-2/3 flex flex-col gap-4">
         <AudioAnalysisDisplay 
           analysisData={audioAnalysisData}
           logSettings={logSettings}
         />
+        <LogSettings settings={logSettings} onChange={setLogSettings} />
       </div>
 
-      <LogSettings settings={logSettings} onChange={setLogSettings} />
     </main>
   );
 }
