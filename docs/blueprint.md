@@ -1,4 +1,4 @@
-# **App Name**: BeatMaster
+# **App Name**: BeatTime
 
 ## Core Features:
 
