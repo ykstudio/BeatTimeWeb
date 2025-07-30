@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useRef, useCallback } from 'react';
@@ -11,15 +12,17 @@ export function useAudioData() {
     if (analyserNodeRef.current) {
       const bufferLength = analyserNodeRef.current.frequencyBinCount;
       const dataArray = new Uint8Array(bufferLength);
-      analyserNodeRef.current.getByteTimeDomainData(dataArray);
+      // Use getByteFrequencyData for the equalizer effect
+      analyserNodeRef.current.getByteFrequencyData(dataArray);
       setAudioData(dataArray);
       animationFrameRef.current = requestAnimationFrame(draw);
     }
   }, []);
 
   const start = useCallback((context: AudioContext, source: MediaStreamAudioSourceNode) => {
+    if(context.state === 'closed') return;
     analyserNodeRef.current = context.createAnalyser();
-    analyserNodeRef.current.fftSize = 2048;
+    analyserNodeRef.current.fftSize = 256; // Smaller FFT size for more responsive visualization
     source.connect(analyserNodeRef.current);
     draw();
   }, [draw]);
@@ -30,10 +33,12 @@ export function useAudioData() {
       animationFrameRef.current = null;
     }
     if(analyserNodeRef.current) {
+        // Disconnect to stop processing
         analyserNodeRef.current.disconnect();
         analyserNodeRef.current = null;
     }
+    setAudioData(new Uint8Array(0)); // Clear the visualizer data
   }, []);
 
-  return { analyserNodeRef, audioData, start, stop };
+  return { audioData, start, stop };
 }

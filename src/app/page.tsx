@@ -45,7 +45,7 @@ export default function Home() {
   const metronomeRef = useRef<MetronomeHandle>(null);
   const micStreamRef = useRef<MediaStream | null>(null);
   const processorNodeRef = useRef<ScriptProcessorNode | null>(null);
-  const { analyserNodeRef, audioData, start: startVisualizer, stop: stopVisualizer } = useAudioData();
+  const { audioData, start: startVisualizer, stop: stopVisualizer } = useAudioData();
   
   const beatTimesRef = useRef<number[]>([]);
   const lastBeatIndexRef = useRef(0);
@@ -59,7 +59,6 @@ export default function Home() {
       console.log(`page.tsx: Metronome beat ${beatNumber} at time ${time.toFixed(3)}`);
       beatTimesRef.current.push(time);
       // Check for misses: if a beat has passed without a hit, count it as a miss.
-      // This is a simple implementation. More advanced logic could be added.
       const now = audioContextRef.current.currentTime;
       if (beatTimesRef.current.length > 1) {
         const lastExpectedBeatTime = beatTimesRef.current[beatTimesRef.current.length - 2];
@@ -77,7 +76,6 @@ export default function Home() {
     if (!audioContextRef.current || !metronomeIsPlaying) return;
 
     const now = audioContextRef.current.currentTime;
-    // Debounce onsets to avoid multiple detections for a single note
     if (now - lastOnsetRef.current < MIN_SILENCE_DURATION) {
       return;
     }
@@ -263,7 +261,7 @@ export default function Home() {
           </div>
         </CardHeader>
         <CardContent className="flex flex-col items-center gap-4 pt-2">
-          <AudioVisualizer frequencyData={audioData} />
+          <AudioVisualizer audioData={audioData} />
           <ResultsDisplay
             score={score}
             accuracy={accuracy}
@@ -294,5 +292,3 @@ export default function Home() {
     </main>
   );
 }
-
-    

@@ -1,17 +1,20 @@
+
 "use client";
 
 import { cn } from "@/lib/utils";
 
 type AudioVisualizerProps = {
-  frequencyData: Uint8Array;
+  audioData: Uint8Array;
 };
 
 const NUM_BARS = 32;
 
-export default function AudioVisualizer({ frequencyData }: AudioVisualizerProps) {
+export default function AudioVisualizer({ audioData }: AudioVisualizerProps) {
   const bars = Array.from({ length: NUM_BARS }, (_, i) => {
-    const dataIndex = Math.floor((i * frequencyData.length) / NUM_BARS);
-    const value = frequencyData[dataIndex] || 0;
+    // The frequency data is logarithmic, so we sample it in a way that
+    // represents lower frequencies more, which is more visually appealing.
+    const dataIndex = Math.floor(Math.pow(i / (NUM_BARS - 1), 2) * (audioData.length / 2));
+    const value = audioData[dataIndex] || 0;
     const height = Math.max(1, (value / 255) * 100);
     return { height };
   });
