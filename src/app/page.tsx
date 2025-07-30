@@ -10,6 +10,7 @@ import ResultsDisplay from '@/components/results-display';
 import { Mic, MicOff, History, ArrowLeft } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { calculateAccuracy } from '@/lib/audio';
+import SummaryDisplay from '@/components/summary-display';
 
 type Status = 'idle' | 'requesting' | 'listening' | 'denied' | 'error';
 export type PracticeSession = {
@@ -192,8 +193,22 @@ export default function Home() {
     }
   }, [cleanupMic, handleOnset, toast]);
   
-  const saveSession = useCallback((sessionData: PracticeSession) => {
+  const saveSession = useCallback(() => {
     try {
+      const finalAccuracy = hits + misses > 0 ? Math.round((hits / (hits + misses)) * 100) : 0;
+      const sessionData: PracticeSession = {
+          id: new Date().toISOString(),
+          date: Date.now(),
+          bpm: currentBpm,
+          score,
+          hits,
+          misses,
+          streak: Math.max(bestStreak, streak), // Save the highest streak for the session
+          accuracy: finalAccuracy,
+          timings
+      };
+      setSession(sessionData);
+
       const history: PracticeSession[] = JSON.parse(localStorage.getItem('practiceHistory') || '[]');
       const newHistory = [sessionData, ...history].slice(0, 10); // Keep last 10 sessions
       localStorage.setItem('practiceHistory', JSON.stringify(newHistory));
@@ -210,27 +225,12 @@ export default function Home() {
         variant: "destructive",
       });
     }
-  }, [toast]);
+  }, [toast, hits, misses, score, streak, bestStreak, timings, currentBpm]);
 
   const handleTogglePractice = async (metronomeIsPlaying: boolean, startMetronome: (bpm: number) => Promise<AudioContext | null>, stopMetronome: () => void) => {
     if (metronomeIsPlaying) {
       stopMetronome();
-      
-      const finalAccuracy = hits + misses > 0 ? Math.round((hits / (hits + misses)) * 100) : 0;
-      const sessionData: PracticeSession = {
-        id: new Date().toISOString(),
-        date: Date.now(),
-        bpm: currentBpm,
-        score,
-        hits,
-        misses,
-        streak: bestStreak, // Use bestStreak for the session summary
-        accuracy: finalAccuracy,
-        timings
-      };
-      setSession(sessionData);
-      saveSession(sessionData);
-
+      saveSession();
       cleanupMic();
       if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
         await audioContextRef.current.close();
@@ -338,7 +338,7 @@ export default function Home() {
           {session && <SummaryDisplay session={session} />}
       </CardContent>
       <CardFooter>
-          <Button className="w-full" onClick={() => setView('practice')}>
+          <Button className="w-full" onClick={() => { setView('practice'); resetPracticeState(); }}>
               Start New Practice
           </Button>
       </CardFooter>
@@ -353,34 +353,3 @@ export default function Home() {
     </main>
   );
 }
-
-const SummaryDisplay = ({ session }: { session: PracticeSession }) => (
-  <div className="grid grid-cols-2 gap-4 text-center">
-      <div className="bg-muted p-4 rounded-lg">
-          <p className="text-sm text-muted-foreground">Score</p>
-          <p className="text-2xl font-bold">{session.score}</p>
-      </div>
-      <div className="bg-muted p-4 rounded-lg">
-          <p className="text-sm text-muted-foreground">Accuracy</p>
-          <p className="text-2xl font-bold">{session.accuracy}%</p>
-      </div>
-      <div className="bg-muted p-4 rounded-lg">
-          <p className="text-sm text-muted-foreground">BPM</p>
-          <p className="text-2xl font-bold">{session.bpm}</p>
-      </div>
-      <div className="bg-muted p-4 rounded-lg">
-          <p className="text-sm text-muted-foreground">Best Streak</p>
-          <p className="text-2xl font-bold">{session.streak}</p>
-      </div>
-      <div className="bg-muted p-4 rounded-lg">
-          <p className="text-sm text-muted-foreground">Hits</p>
-          <p className="text-2xl font-bold">{session.hits}</p>
-      </div>
-      <div className="bg-muted p-4 rounded-lg">
-          <p className="text-sm text-muted-foreground">Misses</p>
-          <p className="text-2xl font-bold">{session.misses}</p>
-      </div>
-  </div>
-);
-
-    
