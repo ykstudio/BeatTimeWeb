@@ -105,6 +105,13 @@ export default function Home() {
     }
     setFrequencyData(new Uint8Array(0));
   }, []);
+
+  const cleanupAudioContext = useCallback(async () => {
+    if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+      await audioContextRef.current.close();
+      audioContextRef.current = null;
+    }
+  }, []);
   
   const handleOnset = useCallback((onsetTime: number) => {
     if (!audioContextRef.current) return;
@@ -244,19 +251,16 @@ export default function Home() {
   }, [toast, hits, misses, score, timings, currentBpm]);
 
   const stopPractice = useCallback(async () => {
-    setMetronomeIsPlaying(false); // This will trigger the stop in Metronome's useEffect
+    metronomeRef.current?.stop();
+    setMetronomeIsPlaying(false);
     
     saveSession();
     cleanupMic();
-    
-    if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
-      await audioContextRef.current.close();
-      audioContextRef.current = null;
-    }
+    await cleanupAudioContext();
     
     setStatus('idle');
     setView('summary');
-  }, [saveSession, cleanupMic]);
+  }, [saveSession, cleanupMic, cleanupAudioContext]);
 
   const startPractice = useCallback(async () => {
     resetPracticeState();
@@ -273,18 +277,14 @@ export default function Home() {
     const micStarted = await startMicrophone(context);
 
     if (micStarted) {
-      metronomeRef.current?.start(currentBpm, context); // Pass the new context to the metronome
+      metronomeRef.current?.start(currentBpm, context);
       setStatus('listening');
       setMetronomeIsPlaying(true);
     } else {
-      if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
-        await audioContextRef.current.close();
-        audioContextRef.current = null;
-      }
+      await cleanupAudioContext();
        setStatus('idle');
-       setMetronomeIsPlaying(false);
     }
-  }, [resetPracticeState, startMicrophone, currentBpm]);
+  }, [resetPracticeState, startMicrophone, currentBpm, cleanupAudioContext]);
   
   const handleTogglePractice = async () => {
     if (metronomeIsPlaying) {
@@ -303,11 +303,9 @@ export default function Home() {
   useEffect(() => {
     return () => {
       cleanupMic();
-       if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
-        audioContextRef.current.close();
-      }
+      cleanupAudioContext();
     };
-  }, [cleanupMic]);
+  }, [cleanupMic, cleanupAudioContext]);
 
   const PracticeView = () => (
     <>

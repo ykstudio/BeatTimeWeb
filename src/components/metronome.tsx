@@ -24,7 +24,7 @@ const Metronome = forwardRef<MetronomeHandle, MetronomeProps>(({ onBeat, initial
 
   const audioContextRef = useRef<AudioContext | null>(null);
   const nextNoteTimeRef = useRef<number>(0);
-  const schedulerTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const schedulerTimerRef = useRef<number | null>(null);
   const beatCountRef = useRef(0);
 
   const scheduleBeat = useCallback((beatNumber: number, time: number) => {
@@ -44,7 +44,7 @@ const Metronome = forwardRef<MetronomeHandle, MetronomeProps>(({ onBeat, initial
   }, [timeSignature]);
 
   const scheduler = useCallback(() => {
-    if (!audioContextRef.current || audioContextRef.current.state === 'closed' || !isPlaying) return;
+    if (!audioContextRef.current || !isPlaying) return;
 
     while (nextNoteTimeRef.current < audioContextRef.current.currentTime + 0.1) {
       const beatInBar = (beatCountRef.current % timeSignature) + 1;
@@ -59,15 +59,15 @@ const Metronome = forwardRef<MetronomeHandle, MetronomeProps>(({ onBeat, initial
   }, [bpm, onBeat, scheduleBeat, timeSignature, isPlaying]);
 
   const start = useCallback((currentBpm: number, context: AudioContext) => {
-    if (!context || context.state === 'closed') return;
+    if (context.state === 'closed') return;
     setBpm(currentBpm);
     audioContextRef.current = context;
     beatCountRef.current = 0;
     nextNoteTimeRef.current = context.currentTime + 0.1;
     if (schedulerTimerRef.current) {
-        clearInterval(schedulerTimerRef.current);
+        window.clearInterval(schedulerTimerRef.current);
     }
-    schedulerTimerRef.current = setInterval(scheduler, 25);
+    schedulerTimerRef.current = window.setInterval(scheduler, 25);
   }, [scheduler]);
 
   const stop = useCallback(() => {
@@ -77,6 +77,7 @@ const Metronome = forwardRef<MetronomeHandle, MetronomeProps>(({ onBeat, initial
     }
     setCurrentBeat(0);
     onBeat(0, 0); // Signal that metronome has stopped
+    // Do not close context here, it's managed by the parent page
     audioContextRef.current = null;
   }, [onBeat]);
 
@@ -84,12 +85,6 @@ const Metronome = forwardRef<MetronomeHandle, MetronomeProps>(({ onBeat, initial
       start,
       stop
   }));
-
-  useEffect(() => {
-    if (!isPlaying) {
-      stop();
-    }
-  }, [isPlaying, stop]);
 
   useEffect(() => {
     return () => {
