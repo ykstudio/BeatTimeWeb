@@ -9,18 +9,19 @@ type Status = 'idle' | 'requesting' | 'listening' | 'denied' | 'error';
 
 interface MetronomeProps {
   onBeat: (beatNumber: number, time: number) => void;
+  initialBpm: number;
   onBpmChange: (bpm: number) => void;
   isPlaying: boolean;
   status: Status;
 }
 
 export interface MetronomeHandle {
-  start: (bpm: number) => Promise<AudioContext | null>;
+  start: (bpm: number, context: AudioContext) => void;
   stop: () => void;
 }
 
-const Metronome = forwardRef<MetronomeHandle, MetronomeProps>(({ onBeat, onBpmChange, isPlaying, status }, ref) => {
-  const [bpm, setBpm] = useState(120);
+const Metronome = forwardRef<MetronomeHandle, MetronomeProps>(({ onBeat, initialBpm, onBpmChange, isPlaying }, ref) => {
+  const [bpm, setBpm] = useState(initialBpm);
   const [timeSignature] = useState(4);
   const [currentBeat, setCurrentBeat] = useState(0);
 
@@ -60,36 +61,24 @@ const Metronome = forwardRef<MetronomeHandle, MetronomeProps>(({ onBeat, onBpmCh
     }
   }, [bpm, onBeat, scheduleBeat, timeSignature]);
 
-  const start = useCallback(async (currentBpm: number): Promise<AudioContext | null> => {
-    if (isPlaying) return null;
-
+  const start = useCallback((currentBpm: number, context: AudioContext) => {
+    if (isPlaying || !context) return;
     setBpm(currentBpm);
-    
-    const context = new (window.AudioContext || (window as any).webkitAudioContext)();
-    
-    if (context.state === 'suspended') {
-      await context.resume();
-    }
-
     audioContextRef.current = context;
     beatCountRef.current = 0;
-    nextNoteTimeRef.current = context.currentTime + 0.1; 
-    
+    nextNoteTimeRef.current = context.currentTime + 0.1;
     schedulerTimerRef.current = setInterval(scheduler, 25);
-    
-    return context;
   }, [isPlaying, scheduler]);
 
   const stop = useCallback(() => {
-    if (!isPlaying && !schedulerTimerRef.current) return;
-
     if (schedulerTimerRef.current) {
       clearInterval(schedulerTimerRef.current);
       schedulerTimerRef.current = null;
     }
     setCurrentBeat(0);
     onBeat(0, 0);
-  }, [isPlaying, onBeat]);
+    audioContextRef.current = null;
+  }, [onBeat]);
 
   useImperativeHandle(ref, () => ({
       start,

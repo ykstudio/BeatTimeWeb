@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import AudioVisualizer from '@/components/audio-visualizer';
 import StatusIndicator from '@/components/status-indicator';
-import Metronome from '@/components/metronome';
+import Metronome, { type MetronomeHandle } from '@/components/metronome';
 import ResultsDisplay from '@/components/results-display';
 import { Mic, MicOff, History, ArrowLeft } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -50,7 +50,7 @@ export default function Home() {
   const streamRef = useRef<MediaStream | null>(null);
   const animationFrameIdRef = useRef<number | null>(null);
   const onsetProcessorRef = useRef<AudioWorkletNode | null>(null);
-  const metronomeRef = useRef<{ start: (bpm: number) => Promise<AudioContext | null>, stop: () => void }>(null);
+  const metronomeRef = useRef<MetronomeHandle>(null);
   
   const beatTimesRef = useRef<number[]>([]);
   const lastBeatIndexRef = useRef<number>(0);
@@ -69,7 +69,7 @@ export default function Home() {
     }
   }, [hits, misses]);
 
-  const resetPracticeState = () => {
+  const resetPracticeState = useCallback(() => {
     setScore(0);
     setHits(0);
     setMisses(0);
@@ -79,7 +79,7 @@ export default function Home() {
     setLastHitTime(0);
     beatTimesRef.current = [];
     lastBeatIndexRef.current = 0;
-  };
+  }, []);
 
   const cleanupMic = useCallback(() => {
     if (animationFrameIdRef.current) {
@@ -91,16 +91,18 @@ export default function Home() {
         onsetProcessorRef.current.disconnect();
         onsetProcessorRef.current = null;
     }
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => track.stop());
-      streamRef.current = null;
-    }
     if (sourceRef.current) {
       sourceRef.current.disconnect();
       sourceRef.current = null;
     }
-    
-    analyserRef.current = null;
+     if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
+    }
+    if(analyserRef.current) {
+        analyserRef.current.disconnect();
+        analyserRef.current = null;
+    }
     setFrequencyData(new Uint8Array(0));
   }, []);
   
@@ -136,7 +138,6 @@ export default function Home() {
   }, []);
 
   const startMicrophone = useCallback(async (context: AudioContext) => {
-    cleanupMic();
     try {
       if (!context.audioWorklet) {
         throw new Error("AudioWorklet not supported");
@@ -170,6 +171,7 @@ export default function Home() {
 
       source.connect(analyser);
       source.connect(onsetProcessor);
+      onsetProcessor.connect(context.destination); // Connect to destination to keep worklet alive
 
       const animate = () => {
         if (analyserRef.current) {
@@ -241,42 +243,55 @@ export default function Home() {
     }
   }, [toast, hits, misses, score, timings, currentBpm]);
 
-  const handleTogglePractice = async () => {
-    if (metronomeIsPlaying) {
-      metronomeRef.current?.stop();
-      saveSession();
-      cleanupMic();
+  const stopPractice = useCallback(async () => {
+    metronomeRef.current?.stop();
+    setMetronomeIsPlaying(false);
+    
+    saveSession();
+    cleanupMic();
+    
+    if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+      await audioContextRef.current.close();
+      audioContextRef.current = null;
+    }
+    
+    setStatus('idle');
+    setView('summary');
+  }, [saveSession, cleanupMic]);
+
+  const startPractice = useCallback(async () => {
+    resetPracticeState();
+    setView('practice');
+    setStatus('requesting');
+    
+    const context = new (window.AudioContext || (window as any).webkitAudioContext)();
+    audioContextRef.current = context;
+
+    if (context.state === 'suspended') {
+      await context.resume();
+    }
+    
+    const micStarted = await startMicrophone(context);
+
+    if (micStarted) {
+      metronomeRef.current?.start(currentBpm, context);
+      setStatus('listening');
+      setMetronomeIsPlaying(true);
+    } else {
       if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
         await audioContextRef.current.close();
         audioContextRef.current = null;
       }
-      setStatus('idle');
-      setMetronomeIsPlaying(false);
-      setView('summary');
+       setStatus('idle');
+       setMetronomeIsPlaying(false);
+    }
+  }, [resetPracticeState, startMicrophone, currentBpm]);
+  
+  const handleTogglePractice = async () => {
+    if (metronomeIsPlaying) {
+      await stopPractice();
     } else {
-      resetPracticeState();
-      setStatus('requesting');
-      const context = await metronomeRef.current?.start(currentBpm);
-      if (context) {
-        audioContextRef.current = context;
-        const micStarted = await startMicrophone(context);
-        if (micStarted) {
-          setStatus('listening');
-          setMetronomeIsPlaying(true);
-        } else {
-          metronomeRef.current?.stop();
-          cleanupMic();
-          if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
-            await audioContextRef.current.close();
-            audioContextRef.current = null;
-          }
-           setStatus('idle');
-           setMetronomeIsPlaying(false);
-        }
-      } else {
-        setStatus('error');
-        setMetronomeIsPlaying(false);
-      }
+      await startPractice();
     }
   };
   
@@ -311,6 +326,7 @@ export default function Home() {
       <Metronome
         ref={metronomeRef}
         onBeat={handleBeat}
+        initialBpm={currentBpm}
         onBpmChange={setCurrentBpm}
         isPlaying={metronomeIsPlaying}
         status={status}
@@ -345,7 +361,7 @@ export default function Home() {
           {session && <SummaryDisplay session={session} />}
       </CardContent>
       <CardFooter>
-          <Button className="w-full" onClick={() => { setView('practice'); resetPracticeState(); }}>
+          <Button className="w-full" onClick={startPractice}>
               Start New Practice
           </Button>
       </CardFooter>
