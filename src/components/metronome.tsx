@@ -28,7 +28,11 @@ const Metronome = forwardRef<MetronomeHandle, MetronomeProps>(({ onBeat, initial
   const beatCountRef = useRef(0);
 
   const scheduleBeat = useCallback((beatNumber: number, time: number) => {
-    if (!audioContextRef.current) return;
+    if (!audioContextRef.current) {
+        console.error("metronome.tsx: scheduleBeat called with no audioContextRef.current");
+        return;
+    };
+    console.log(`metronome.tsx: Scheduling beat ${beatNumber} at time ${time}`);
     
     const osc = audioContextRef.current.createOscillator();
     const envelope = audioContextRef.current.createGain();
@@ -44,10 +48,15 @@ const Metronome = forwardRef<MetronomeHandle, MetronomeProps>(({ onBeat, initial
   }, [timeSignature]);
 
   const scheduler = useCallback(() => {
-    if (!audioContextRef.current || !isPlaying) return;
-
+    if (!audioContextRef.current || !isPlaying) {
+      // This is expected to be called even when not playing, so no log here.
+      return;
+    }
+    
+    // Look ahead to schedule notes
     while (nextNoteTimeRef.current < audioContextRef.current.currentTime + 0.1) {
       const beatInBar = (beatCountRef.current % timeSignature) + 1;
+      console.log(`metronome.tsx: Scheduler is running. Next note time: ${nextNoteTimeRef.current}, Beat: ${beatInBar}`);
       onBeat(beatInBar, nextNoteTimeRef.current);
       setCurrentBeat(beatInBar);
       scheduleBeat(beatInBar, nextNoteTimeRef.current);
@@ -59,26 +68,36 @@ const Metronome = forwardRef<MetronomeHandle, MetronomeProps>(({ onBeat, initial
   }, [bpm, onBeat, scheduleBeat, timeSignature, isPlaying]);
 
   const start = useCallback((currentBpm: number, context: AudioContext) => {
-    if (context.state === 'closed') return;
+    console.log(`metronome.tsx: Metronome.start called. BPM: ${currentBpm}, Context state: ${context.state}`);
+    if (context.state === 'closed') {
+        console.error("metronome.tsx: Cannot start, received a closed AudioContext.");
+        return;
+    }
     setBpm(currentBpm);
     audioContextRef.current = context;
     beatCountRef.current = 0;
     nextNoteTimeRef.current = context.currentTime + 0.1;
+    
     if (schedulerTimerRef.current) {
         window.clearInterval(schedulerTimerRef.current);
     }
+    
+    console.log("metronome.tsx: Starting scheduler interval.");
     schedulerTimerRef.current = window.setInterval(scheduler, 25);
   }, [scheduler]);
 
   const stop = useCallback(() => {
+    console.log("metronome.tsx: Metronome.stop called");
     if (schedulerTimerRef.current) {
+      console.log("metronome.tsx: Clearing scheduler interval.");
       clearInterval(schedulerTimerRef.current);
       schedulerTimerRef.current = null;
     }
     setCurrentBeat(0);
     onBeat(0, 0); // Signal that metronome has stopped
     // Do not close context here, it's managed by the parent page
-    audioContextRef.current = null;
+    audioContextRef.current = null; 
+    console.log("metronome.tsx: Metronome stopped.");
   }, [onBeat]);
 
   useImperativeHandle(ref, () => ({

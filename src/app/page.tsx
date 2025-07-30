@@ -17,35 +17,53 @@ export default function Home() {
   const { toast } = useToast();
 
   const stopPractice = useCallback(() => {
+    console.log("page.tsx: stopPractice called");
+    setMetronomeIsPlaying(false);
     if (metronomeRef.current) {
+        console.log("page.tsx: Calling metronomeRef.current.stop()");
         metronomeRef.current.stop();
     }
     if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+      console.log(`page.tsx: Closing AudioContext. Current state: ${audioContextRef.current.state}`);
       audioContextRef.current.close().then(() => {
+        console.log("page.tsx: AudioContext closed.");
         audioContextRef.current = null;
       });
+    } else {
+      console.log("page.tsx: No active AudioContext to close.");
     }
-    setMetronomeIsPlaying(false);
   }, []);
 
   const startPractice = useCallback(async () => {
+    console.log("page.tsx: startPractice called");
     try {
-        const context = new (window.AudioContext || (window as any).webkitAudioContext)();
-        audioContextRef.current = context;
+        if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
+            console.log("page.tsx: Creating new AudioContext");
+            const context = new (window.AudioContext || (window as any).webkitAudioContext)();
+            audioContextRef.current = context;
+        }
+        
+        const context = audioContextRef.current;
+        console.log(`page.tsx: AudioContext state is '${context.state}'`);
 
         if (context.state === 'suspended') {
+            console.log("page.tsx: Resuming AudioContext...");
             await context.resume();
+            console.log(`page.tsx: AudioContext resumed. New state is '${context.state}'`);
         }
 
         if (metronomeRef.current) {
+            console.log("page.tsx: Calling metronomeRef.current.start()");
             metronomeRef.current.start(currentBpm, context);
             setMetronomeIsPlaying(true);
+        } else {
+            console.error("page.tsx: metronomeRef.current is null!");
         }
     } catch (e) {
-      console.error("Failed to start practice:", e);
+      console.error("page.tsx: Failed to start practice:", e);
       toast({
         title: "Error",
-        description: "Could not start the microphone or metronome. Please check permissions and try again.",
+        description: "Could not start the microphone or metronome. Please check browser console for logs.",
         variant: "destructive"
       });
       setMetronomeIsPlaying(false);
@@ -54,6 +72,7 @@ export default function Home() {
 
 
   const handleTogglePractice = async () => {
+    console.log(`page.tsx: handleTogglePractice called. metronomeIsPlaying: ${metronomeIsPlaying}`);
     if (metronomeIsPlaying) {
       stopPractice();
     } else {
@@ -64,6 +83,7 @@ export default function Home() {
   useEffect(() => {
     // Cleanup on component unmount
     return () => {
+      console.log("page.tsx: Unmounting component, ensuring cleanup.");
       stopPractice();
     };
   }, [stopPractice]);
