@@ -244,8 +244,7 @@ export default function Home() {
   }, [toast, hits, misses, score, timings, currentBpm]);
 
   const stopPractice = useCallback(async () => {
-    metronomeRef.current?.stop();
-    setMetronomeIsPlaying(false);
+    setMetronomeIsPlaying(false); // This will trigger the stop in Metronome's useEffect
     
     saveSession();
     cleanupMic();
@@ -264,17 +263,17 @@ export default function Home() {
     setView('practice');
     setStatus('requesting');
     
+    // Create and resume the AudioContext here
     const context = new (window.AudioContext || (window as any).webkitAudioContext)();
-    audioContextRef.current = context;
-
     if (context.state === 'suspended') {
       await context.resume();
     }
-    
+    audioContextRef.current = context;
+
     const micStarted = await startMicrophone(context);
 
     if (micStarted) {
-      metronomeRef.current?.start(currentBpm, context);
+      metronomeRef.current?.start(currentBpm, context); // Pass the new context to the metronome
       setStatus('listening');
       setMetronomeIsPlaying(true);
     } else {
@@ -329,7 +328,6 @@ export default function Home() {
         initialBpm={currentBpm}
         onBpmChange={setCurrentBpm}
         isPlaying={metronomeIsPlaying}
-        status={status}
       />
     </CardContent>
     <CardFooter>

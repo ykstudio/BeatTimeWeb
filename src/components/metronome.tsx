@@ -5,14 +5,11 @@ import { Slider } from '@/components/ui/slider';
 import { Label } from '@/components/ui/label';
 import BeatIndicator from './beat-indicator';
 
-type Status = 'idle' | 'requesting' | 'listening' | 'denied' | 'error';
-
 interface MetronomeProps {
   onBeat: (beatNumber: number, time: number) => void;
   initialBpm: number;
   onBpmChange: (bpm: number) => void;
   isPlaying: boolean;
-  status: Status;
 }
 
 export interface MetronomeHandle {
@@ -47,7 +44,7 @@ const Metronome = forwardRef<MetronomeHandle, MetronomeProps>(({ onBeat, initial
   }, [timeSignature]);
 
   const scheduler = useCallback(() => {
-    if (!audioContextRef.current || audioContextRef.current.state === 'closed') return;
+    if (!audioContextRef.current || audioContextRef.current.state === 'closed' || !isPlaying) return;
 
     while (nextNoteTimeRef.current < audioContextRef.current.currentTime + 0.1) {
       const beatInBar = (beatCountRef.current % timeSignature) + 1;
@@ -59,16 +56,19 @@ const Metronome = forwardRef<MetronomeHandle, MetronomeProps>(({ onBeat, initial
       nextNoteTimeRef.current += secondsPerBeat;
       beatCountRef.current++;
     }
-  }, [bpm, onBeat, scheduleBeat, timeSignature]);
+  }, [bpm, onBeat, scheduleBeat, timeSignature, isPlaying]);
 
   const start = useCallback((currentBpm: number, context: AudioContext) => {
-    if (isPlaying || !context) return;
+    if (!context || context.state === 'closed') return;
     setBpm(currentBpm);
     audioContextRef.current = context;
     beatCountRef.current = 0;
     nextNoteTimeRef.current = context.currentTime + 0.1;
+    if (schedulerTimerRef.current) {
+        clearInterval(schedulerTimerRef.current);
+    }
     schedulerTimerRef.current = setInterval(scheduler, 25);
-  }, [isPlaying, scheduler]);
+  }, [scheduler]);
 
   const stop = useCallback(() => {
     if (schedulerTimerRef.current) {
@@ -76,7 +76,7 @@ const Metronome = forwardRef<MetronomeHandle, MetronomeProps>(({ onBeat, initial
       schedulerTimerRef.current = null;
     }
     setCurrentBeat(0);
-    onBeat(0, 0);
+    onBeat(0, 0); // Signal that metronome has stopped
     audioContextRef.current = null;
   }, [onBeat]);
 
@@ -86,18 +86,18 @@ const Metronome = forwardRef<MetronomeHandle, MetronomeProps>(({ onBeat, initial
   }));
 
   useEffect(() => {
+    if (!isPlaying) {
+      stop();
+    }
+  }, [isPlaying, stop]);
+
+  useEffect(() => {
     return () => {
       if (schedulerTimerRef.current) {
         clearInterval(schedulerTimerRef.current);
       }
     };
   }, []);
-  
-  useEffect(() => {
-      if (!isPlaying) {
-          stop();
-      }
-  }, [isPlaying, stop])
 
   const handleBpmChange = (value: number[]) => {
     const newBpm = value[0];
