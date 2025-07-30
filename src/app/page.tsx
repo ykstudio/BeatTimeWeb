@@ -148,7 +148,7 @@ export default function Home() {
         sourceNodeRef.current = context.createMediaStreamSource(stream);
         
         const analyserNode = context.createAnalyser();
-        analyserNode.fftSize = 2048; // Increased for better frequency resolution
+        analyserNode.fftSize = 4096; // Increased for better frequency resolution
         sourceNodeRef.current.connect(analyserNode);
 
         startVisualizer(analyserNode, context);

@@ -13,24 +13,34 @@ type AudioAnalysisDisplayProps = {
   logSettings: LogSettingsType;
 };
 
-// Map spectral centroid to an HSL color
-// Lower centroid (bass sounds) -> cooler colors (blue/purple)
-// Higher centroid (treble sounds) -> warmer colors (yellow/orange)
+// Map spectral centroid to an HSL color using a logarithmic scale for better perception.
 function getTimbreColor(centroid: number): string {
-    if (centroid === 0) return 'hsl(240, 10%, 25%)'; // Default color for silence
+    if (centroid < 50) return 'hsl(240, 10%, 25%)'; // Default color for silence or very low freq
+
+    // Logarithmic scale is better for frequencies.
+    // Let's define our expected range, e.g., 100Hz to 8000Hz
+    const minFreq = 100;
+    const maxFreq = 8000;
     
-    // Normalize centroid (values can range roughly from 0 to 10000)
-    // We'll cap it at 5000 for a reasonable color range
-    const normalized = Math.min(centroid / 5000, 1);
+    // Clamp the centroid to our expected range
+    const clampedCentroid = Math.max(minFreq, Math.min(centroid, maxFreq));
+
+    // Calculate the logarithmic position of the centroid within the range
+    const logMin = Math.log(minFreq);
+    const logMax = Math.log(maxFreq);
+    const logCentroid = Math.log(clampedCentroid);
     
-    // Map normalized value to hue (240 for blue down to 0 for red)
-    const hue = 240 - (normalized * 200); 
-    const saturation = 70;
-    const lightness = 50;
+    // Normalize the log position to a 0-1 scale
+    const normalized = (logCentroid - logMin) / (logMax - logMin);
+
+    // Map normalized value to hue (270 for deep blue down to 0 for red)
+    // This gives a more intuitive color range: bass (blue/purple) -> mids (green) -> treble (yellow/red)
+    const hue = 270 - (normalized * 270); 
+    const saturation = 80;
+    const lightness = 55;
 
     return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
 }
-
 
 export default function AudioAnalysisDisplay({ analysisData, logSettings }: AudioAnalysisDisplayProps) {
   const { frequencyData, dominantFrequency, audioLevel, spectralCentroid } = analysisData;
@@ -63,7 +73,7 @@ export default function AudioAnalysisDisplay({ analysisData, logSettings }: Audi
             </div>
             <div className="bg-muted/50 rounded-lg p-4 flex flex-col justify-center items-center col-span-2">
                 <p className="text-sm text-muted-foreground">Timbre</p>
-                 <div className="w-24 h-24 mt-2 rounded-full transition-colors duration-200" style={{ backgroundColor: timbreColor }} />
+                 <div className="w-24 h-24 mt-2 rounded-full transition-colors duration-200 border-4" style={{ backgroundColor: timbreColor, borderColor: timbreColor.replace(/,\s*\d+%\)/, ', 35%)') }} />
             </div>
         </div>
       </CardContent>
