@@ -10,7 +10,6 @@ import { useToast } from '@/hooks/use-toast';
 import StatusIndicator from '@/components/status-indicator';
 import AudioVisualizer from '@/components/audio-visualizer';
 import ResultsDisplay from '@/components/results-display';
-import { calculateAccuracy } from '@/lib/audio';
 import { useAudioData } from '@/hooks/use-audio-data';
 
 export type PracticeSession = {
@@ -23,9 +22,6 @@ export type PracticeSession = {
 };
 
 type Status = 'idle' | 'requesting' | 'listening' | 'denied' | 'error' | 'stopped';
-
-const SENSITIVITY = 0.05; // Onset detection sensitivity
-const MIN_SILENCE_DURATION = 0.1; // seconds
 
 export default function Home() {
   const [metronomeIsPlaying, setMetronomeIsPlaying] = useState(false);
@@ -40,17 +36,16 @@ export default function Home() {
   const [hits, setHits] = useState(0);
   const [misses, setMisses] = useState(0);
   const [lastHitTime, setLastHitTime] = useState(0);
+  const [audioLevel, setAudioLevel] = useState(0);
 
   const audioContextRef = useRef<AudioContext | null>(null);
   const metronomeRef = useRef<MetronomeHandle>(null);
   const micStreamRef = useRef<MediaStream | null>(null);
-  const processorNodeRef = useRef<ScriptProcessorNode | null>(null);
   const sourceNodeRef = useRef<MediaStreamAudioSourceNode | null>(null);
-  const { audioData, start: startVisualizer, stop: stopVisualizer, analyserNodeRef } = useAudioData();
+  const { audioData, start: startVisualizer, stop: stopVisualizer, analyserNodeRef } = useAudioData(setAudioLevel);
   
   const beatTimesRef = useRef<number[]>([]);
   const lastBeatIndexRef = useRef(0);
-  const lastOnsetRef = useRef(0);
 
   const { toast } = useToast();
   
@@ -59,44 +54,6 @@ export default function Home() {
       beatTimesRef.current.push(time);
     }
   };
-
-  const processOnsets = useCallback((audioBuffer: AudioBuffer) => {
-    if (!audioContextRef.current || !metronomeIsPlaying) return;
-
-    const data = audioBuffer.getChannelData(0);
-    const rms = Math.sqrt(data.reduce((acc, val) => acc + val * val, 0) / data.length);
-    console.log(`page.tsx: processOnsets running. RMS: ${rms.toFixed(4)}`);
-
-    const now = audioContextRef.current.currentTime;
-    if (now - lastOnsetRef.current < MIN_SILENCE_DURATION) {
-      return;
-    }
-    
-    if (rms > SENSITIVITY) { 
-      lastOnsetRef.current = now;
-      console.log(`page.tsx: Onset detected at time: ${now.toFixed(3)} with RMS: ${rms.toFixed(3)}`);
-      
-      const result = calculateAccuracy(now, beatTimesRef.current, lastBeatIndexRef.current);
-      console.log("page.tsx: Accuracy calculation result:", result);
-
-      if (result.hit) {
-        setHits(prev => prev + 1);
-        const newStreak = streak + 1;
-        setStreak(newStreak);
-        console.log(`page.tsx: Hit! New streak: ${newStreak}`);
-        setScore(prev => prev + 10);
-        setLastHitTime(now);
-        lastBeatIndexRef.current = result.beatIndex;
-      } else {
-        setMisses(prev => prev + 1);
-        if (streak > 0) {
-            console.log(`page.tsx: Miss! Streak reset from ${streak} to 0.`);
-        }
-        setStreak(0);
-      }
-    }
-  }, [metronomeIsPlaying, beatTimesRef, lastBeatIndexRef, hits, misses, score, streak]);
-
 
   const stopPractice = useCallback(() => {
     console.log("page.tsx: stopPractice called");
@@ -108,18 +65,13 @@ export default function Home() {
     
     stopVisualizer();
 
-    if (processorNodeRef.current) {
-      processorNodeRef.current.disconnect();
-      processorNodeRef.current.onaudioprocess = null;
-      processorNodeRef.current = null;
-      console.log("page.tsx: Disconnecting ScriptProcessorNode.");
-    }
     if(analyserNodeRef.current) {
       analyserNodeRef.current.disconnect();
     }
     if (sourceNodeRef.current) {
       sourceNodeRef.current.disconnect();
     }
+    sourceNodeRef.current = null;
 
     if (micStreamRef.current) {
       micStreamRef.current.getTracks().forEach(track => track.stop());
@@ -165,21 +117,6 @@ export default function Home() {
         
         startVisualizer(context, sourceNodeRef.current);
         
-        const bufferSize = 1024;
-        processorNodeRef.current = context.createScriptProcessor(bufferSize, 1, 1);
-        processorNodeRef.current.onaudioprocess = (e) => processOnsets(e.inputBuffer);
-        
-        if (analyserNodeRef.current) {
-            sourceNodeRef.current.connect(analyserNodeRef.current);
-            analyserNodeRef.current.connect(processorNodeRef.current);
-            console.log("page.tsx: Source -> Analyser -> Processor connection established.");
-        } else {
-            sourceNodeRef.current.connect(processorNodeRef.current);
-        }
-        
-        processorNodeRef.current.connect(context.destination); 
-        console.log("page.tsx: ScriptProcessorNode connected to destination.");
-
         console.log("page.tsx: Microphone setup complete.");
 
         if (metronomeRef.current) {
@@ -200,7 +137,7 @@ export default function Home() {
       }
       stopPractice();
     }
-  }, [currentBpm, toast, processOnsets, stopPractice, startVisualizer, analyserNodeRef]);
+  }, [currentBpm, toast, stopPractice, startVisualizer]);
 
 
   const handleTogglePractice = async () => {
@@ -215,7 +152,9 @@ export default function Home() {
   useEffect(() => {
     return () => {
       console.log("page.tsx: Unmounting component, ensuring cleanup.");
-      stopPractice();
+      if (micStreamRef.current || audioContextRef.current) {
+          stopPractice();
+      }
     };
   }, [stopPractice]);
 
@@ -254,6 +193,10 @@ export default function Home() {
         </CardHeader>
         <CardContent className="flex flex-col items-center gap-4 pt-2">
           <AudioVisualizer audioData={audioData} />
+          <div className="text-center">
+            <p className="text-sm text-muted-foreground">Audio Input Velocity</p>
+            <p className="text-lg font-bold">{audioLevel}</p>
+          </div>
           <ResultsDisplay
             score={score}
             accuracy={accuracy}
