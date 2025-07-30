@@ -5,29 +5,29 @@ This file outlines the development tasks for the BeatTime application, based on 
 ## Phase 1: Core MVP Development
 
 ### F1.1 Web Audio Engine & Timing Accuracy
-- [ ] Implement Web Audio API for real-time microphone processing.
-- [ ] Develop an AudioContext-based amplitude detection algorithm for note onsets.
-- [ ] Calculate timing accuracy of detected onsets against a metronome beat.
-  - [ ] Ensure latency is below 50ms.
+- [X] Implement Web Audio API for real-time microphone processing.
+- [X] Develop an AudioContext-based amplitude detection algorithm for note onsets.
+- [X] Calculate timing accuracy of detected onsets against a metronome beat.
+  - [X] Ensure latency is below 50ms.
 - [ ] Add adjustable sensitivity for different instruments and environments.
 - [ ] Test and ensure cross-browser compatibility (Chrome, Firefox, Safari, Edge).
 
 ### F1.2 PWA Metronome System
-- [ ] Create a precise visual and audio metronome using the Web Audio API scheduler.
-  - [ ] Support tempos from 40-200 BPM.
-  - [ ] Implement common time signatures (4/4, 3/4, 2/4).
-- [ ] Allow for customizable click sounds using audio buffers.
+- [X] Create a precise visual and audio metronome using the Web Audio API scheduler.
+  - [X] Support tempos from 40-200 BPM.
+  - [X] Implement common time signatures (4/4, 3/4, 2/4).
+- [X] Allow for customizable click sounds using audio buffers.
 
 ### F1.3 Practice Sessions & UI
-- [ ] Implement browser-based session recording and timing analysis.
-- [ ] Display real-time accuracy feedback during a practice session.
-- [ ] Create a session summary page with detailed statistics (accuracy percentage, streak).
-- [ ] Implement basic UI for the practice session.
-- [ ] Store practice history locally using localStorage.
+- [X] Implement browser-based session recording and timing analysis.
+- [X] Display real-time accuracy feedback during a practice session.
+- [X] Create a session summary page with detailed statistics (accuracy percentage, streak).
+- [X] Implement basic UI for the practice session.
+- [X] Store practice history locally using localStorage.
 
 ### F1.4 Basic Scoring & PWA
-- [ ] Implement streak tracking and personal best records in local storage.
-- [ ] Log practice time and session analytics.
+- [X] Implement streak tracking and personal best records in local storage.
+- [X] Log practice time and session analytics.
 - [ ] Set up the app as a basic Progressive Web App (PWA) with a manifest file.
 - [ ] Ensure core features are available offline.
 

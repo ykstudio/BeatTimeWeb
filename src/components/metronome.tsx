@@ -6,17 +6,18 @@ import { Label } from '@/components/ui/label';
 import BeatIndicator from './beat-indicator';
 
 interface MetronomeProps {
-  onBeat: (beatNumber: number) => void;
+  onBeat: (beatNumber: number, time: number) => void;
+  onBpmChange: (bpm: number) => void;
   render: (props: {
     isPlaying: boolean;
-    start: () => Promise<AudioContext | null>;
+    start: (bpm: number) => Promise<AudioContext | null>;
     stop: () => void;
     controls: ReactNode;
     beatIndicator: ReactNode;
   }) => ReactNode;
 }
 
-const Metronome = ({ onBeat, render }: MetronomeProps) => {
+const Metronome = ({ onBeat, onBpmChange, render }: MetronomeProps) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [bpm, setBpm] = useState(120);
   const [timeSignature] = useState(4);
@@ -33,7 +34,6 @@ const Metronome = ({ onBeat, render }: MetronomeProps) => {
     const osc = audioContextRef.current.createOscillator();
     const envelope = audioContextRef.current.createGain();
 
-    // First beat of the bar is higher pitch
     osc.frequency.value = (beatNumber % timeSignature === 1) ? 1000 : 800;
     envelope.gain.setValueAtTime(1, time);
     envelope.gain.exponentialRampToValueAtTime(0.001, time + 0.05);
@@ -49,7 +49,7 @@ const Metronome = ({ onBeat, render }: MetronomeProps) => {
 
     while (nextNoteTimeRef.current < audioContextRef.current.currentTime + 0.1) {
       const beatInBar = (beatCountRef.current % timeSignature) + 1;
-      onBeat(beatInBar);
+      onBeat(beatInBar, nextNoteTimeRef.current);
       setCurrentBeat(beatInBar);
       scheduleBeat(beatInBar, nextNoteTimeRef.current);
       
@@ -59,8 +59,10 @@ const Metronome = ({ onBeat, render }: MetronomeProps) => {
     }
   }, [bpm, onBeat, scheduleBeat, timeSignature]);
 
-  const start = useCallback(async (): Promise<AudioContext | null> => {
+  const start = useCallback(async (currentBpm: number): Promise<AudioContext | null> => {
     if (isPlaying) return null;
+
+    setBpm(currentBpm);
     
     const context = new (window.AudioContext || (window as any).webkitAudioContext)();
     
@@ -71,7 +73,7 @@ const Metronome = ({ onBeat, render }: MetronomeProps) => {
     audioContextRef.current = context;
     setIsPlaying(true);
     beatCountRef.current = 0;
-    nextNoteTimeRef.current = context.currentTime + 0.1; // Add a small delay to start
+    nextNoteTimeRef.current = context.currentTime + 0.1; 
     
     schedulerTimerRef.current = setInterval(scheduler, 25);
     
@@ -86,9 +88,8 @@ const Metronome = ({ onBeat, render }: MetronomeProps) => {
       clearInterval(schedulerTimerRef.current);
       schedulerTimerRef.current = null;
     }
-    // The AudioContext is closed by the parent component that creates it.
     setCurrentBeat(0);
-    onBeat(0);
+    onBeat(0, 0);
   }, [isPlaying, onBeat]);
 
   useEffect(() => {
@@ -98,6 +99,12 @@ const Metronome = ({ onBeat, render }: MetronomeProps) => {
       }
     };
   }, []);
+
+  const handleBpmChange = (value: number[]) => {
+    const newBpm = value[0];
+    setBpm(newBpm);
+    onBpmChange(newBpm);
+  }
 
   const controls = (
     <div className="w-full max-w-xs space-y-4">
@@ -109,7 +116,7 @@ const Metronome = ({ onBeat, render }: MetronomeProps) => {
           max={200}
           step={1}
           value={[bpm]}
-          onValueChange={(value) => setBpm(value[0])}
+          onValueChange={handleBpmChange}
           disabled={isPlaying}
         />
       </div>
