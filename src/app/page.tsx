@@ -12,6 +12,7 @@ import AudioVisualizer from '@/components/audio-visualizer';
 import ResultsDisplay from '@/components/results-display';
 import { useAudioData } from '@/hooks/use-audio-data';
 import { calculateAccuracy, TIMING_WINDOW } from '@/lib/audio';
+import LogSettings, { LogSettingsType } from '@/components/log-settings';
 
 export type PracticeSession = {
     score: number;
@@ -40,6 +41,11 @@ export default function Home() {
   const [misses, setMisses] = useState(0);
   const [lastHitTime, setLastHitTime] = useState(0);
   const [audioLevel, setAudioLevel] = useState(0);
+  const [logSettings, setLogSettings] = useState<LogSettingsType>({
+    metronome: false,
+    onsets: false,
+    hits: true,
+  });
 
   const audioContextRef = useRef<AudioContext | null>(null);
   const metronomeRef = useRef<MetronomeHandle>(null);
@@ -54,6 +60,9 @@ export default function Home() {
   const { toast } = useToast();
   
   const handleBeat = (beatNumber: number, time: number) => {
+    if (logSettings.metronome && beatNumber > 0) {
+      console.log(`Metronome beat ${beatNumber} at time ${time.toFixed(3)}`);
+    }
     if (beatNumber > 0 && time > 0) {
       beatTimesRef.current.push(time);
     }
@@ -64,25 +73,21 @@ export default function Home() {
     const timingDeltaMs = result.timing * 1000;
 
     if (result.hit) {
-      console.log(`Hit detected! Timing delta: ${timingDeltaMs.toFixed(2)}ms`);
+      if (logSettings.hits) console.log(`Hit detected! Timing delta: ${timingDeltaMs.toFixed(2)}ms`);
       setScore(s => s + 10);
       setStreak(s => s + 1);
       setHits(h => h + 1);
       setLastHitTime(onsetTime); // For animation
     } else {
-       if (isFinite(timingDeltaMs)) {
-        console.log(`Miss detected. Timing delta: ${timingDeltaMs.toFixed(2)}ms`);
-      }
+      if (logSettings.hits && isFinite(timingDeltaMs)) console.log(`Miss detected. Timing delta: ${timingDeltaMs.toFixed(2)}ms`);
       setStreak(0);
       setMisses(m => m + 1);
     }
     lastBeatIndexRef.current = result.beatIndex;
 
-  }, []);
+  }, [logSettings.hits]);
 
   const stopPractice = useCallback(() => {
-    console.log("page.tsx: stopPractice called");
-    
     setMetronomeIsPlaying(false);
     if (metronomeRef.current) {
         metronomeRef.current.stop();
@@ -102,7 +107,6 @@ export default function Home() {
 
     if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
       audioContextRef.current.close().then(() => {
-        console.log("page.tsx: AudioContext closed.");
         audioContextRef.current = null;
       });
     }
@@ -111,7 +115,6 @@ export default function Home() {
   }, [stopVisualizer]);
 
   const startPractice = useCallback(async () => {
-    console.log("page.tsx: startPractice called");
     setStatus('requesting');
     beatTimesRef.current = [];
     lastBeatIndexRef.current = 0;
@@ -129,7 +132,6 @@ export default function Home() {
             await context.resume();
         }
 
-        console.log("page.tsx: Requesting microphone access...");
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         micStreamRef.current = stream;
         sourceNodeRef.current = context.createMediaStreamSource(stream);
@@ -140,8 +142,6 @@ export default function Home() {
 
         startVisualizer(analyserNode);
         
-        console.log("page.tsx: Microphone setup complete.");
-
         if (metronomeRef.current) {
             metronomeRef.current.start(currentBpm, context);
             setMetronomeIsPlaying(true);
@@ -150,7 +150,7 @@ export default function Home() {
             throw new Error("Metronome reference not found.");
         }
     } catch (e) {
-      console.error("page.tsx: Failed to start practice:", e);
+      console.error("Failed to start practice:", e);
       if (e instanceof Error && e.name === 'NotAllowedError') {
         setStatus('denied');
         toast({ title: "Microphone Access Denied", description: "Please allow microphone access in your browser settings to start.", variant: "destructive" });
@@ -173,17 +173,19 @@ export default function Home() {
 
   // Onset detection using audioLevel
   useEffect(() => {
+    if (logSettings.onsets) {
+      console.log(`Audio Level: ${audioLevel}`);
+    }
     if (metronomeIsPlaying && audioContextRef.current) {
       const currentTime = audioContextRef.current.currentTime;
-      // Cooldown to prevent multiple detections for a single sound
-      const cooldown = 0.2; // 200ms
+      const cooldown = 0.2; // 200ms cooldown to prevent multiple detections
 
       if (audioLevel >= ONSET_THRESHOLD && (currentTime - lastOnsetTimeRef.current > cooldown)) {
         lastOnsetTimeRef.current = currentTime;
         processHit(currentTime);
       }
     }
-  }, [audioLevel, metronomeIsPlaying, processHit]);
+  }, [audioLevel, metronomeIsPlaying, processHit, logSettings.onsets]);
 
   useEffect(() => {
     return () => {
@@ -255,6 +257,7 @@ export default function Home() {
           </Button>
         </CardFooter>
       </Card>
+      <LogSettings settings={logSettings} onChange={setLogSettings} />
     </main>
   );
 }
