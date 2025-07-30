@@ -9,7 +9,7 @@ import Metronome from '@/components/metronome';
 import ResultsDisplay from '@/components/results-display';
 import { Mic, MicOff, History, ArrowLeft } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { detectOnsets, calculateAccuracy, TIMING_WINDOW } from '@/lib/audio';
+import { calculateAccuracy } from '@/lib/audio';
 
 type Status = 'idle' | 'requesting' | 'listening' | 'denied' | 'error';
 export type PracticeSession = {
@@ -73,22 +73,23 @@ export default function Home() {
   const cleanupMic = useCallback(() => {
     if (animationFrameIdRef.current) {
       cancelAnimationFrame(animationFrameIdRef.current);
+      animationFrameIdRef.current = null;
     }
     if (onsetProcessorRef.current) {
+        onsetProcessorRef.current.port.onmessage = null;
         onsetProcessorRef.current.disconnect();
         onsetProcessorRef.current = null;
     }
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
     }
     if (sourceRef.current) {
       sourceRef.current.disconnect();
+      sourceRef.current = null;
     }
     
     analyserRef.current = null;
-    sourceRef.current = null;
-    streamRef.current = null;
-    animationFrameIdRef.current = null;
     setFrequencyData(new Uint8Array(0));
   }, []);
   
@@ -100,14 +101,15 @@ export default function Home() {
     if (beatIndex > lastBeatIndexRef.current) {
         lastBeatIndexRef.current = beatIndex;
 
+        setTimings(t => [...t, timing]);
         if (hit) {
             setScore(s => s + 10);
             setHits(h => h + 1);
             setStreak(s => {
                 const newStreak = s + 1;
-                if (newStreak > bestStreak) {
-                    setBestStreak(newStreak);
+                if (newStreak > (parseInt(localStorage.getItem('bestStreak') || '0', 10))) {
                     localStorage.setItem('bestStreak', newStreak.toString());
+                    setBestStreak(newStreak);
                 }
                 return newStreak;
             });
@@ -116,15 +118,17 @@ export default function Home() {
             setMisses(m => m + 1);
             setStreak(0);
         }
-        setTimings(t => [...t, timing]);
     }
-
-  }, [bestStreak]);
+  }, []);
 
   const startMicrophone = useCallback(async (context: AudioContext) => {
     cleanupMic();
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      if (!context.audioWorklet) {
+        throw new Error("AudioWorklet not supported");
+      }
+      
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
       streamRef.current = stream;
       
       const source = context.createMediaStreamSource(stream);
@@ -134,7 +138,13 @@ export default function Home() {
       analyser.fftSize = 256;
       analyserRef.current = analyser;
 
-      await context.audioWorklet.addModule('/audio-processor.js');
+      try {
+        await context.audioWorklet.addModule('/audio-processor.js');
+      } catch (e) {
+        console.error("Error adding AudioWorklet module", e);
+        throw new Error("Failed to load audio processor module.");
+      }
+
       const onsetProcessor = new AudioWorkletNode(context, 'onset-processor');
       onsetProcessorRef.current = onsetProcessor;
 
@@ -163,7 +173,7 @@ export default function Home() {
     } catch (err: any) {
       console.error('Error accessing microphone:', err);
       let message = "An unknown error occurred while accessing the microphone."
-      if (err.name === 'NotAllowedError') {
+      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
         setStatus('denied');
         message = "Microphone permission was denied. Please allow microphone access in your browser settings.";
       } else if (err.message.includes('module')) {
@@ -177,25 +187,36 @@ export default function Home() {
           description: message,
           variant: "destructive"
       });
+      cleanupMic();
       return false;
     }
   }, [cleanupMic, handleOnset, toast]);
   
   const saveSession = useCallback((sessionData: PracticeSession) => {
-    const history: PracticeSession[] = JSON.parse(localStorage.getItem('practiceHistory') || '[]');
-    const newHistory = [sessionData, ...history].slice(0, 10); // Keep last 10 sessions
-    localStorage.setItem('practiceHistory', JSON.stringify(newHistory));
-    
-    const bestScore = parseInt(localStorage.getItem('bestScore') || '0', 10);
-    if (sessionData.score > bestScore) {
-      localStorage.setItem('bestScore', sessionData.score.toString());
+    try {
+      const history: PracticeSession[] = JSON.parse(localStorage.getItem('practiceHistory') || '[]');
+      const newHistory = [sessionData, ...history].slice(0, 10); // Keep last 10 sessions
+      localStorage.setItem('practiceHistory', JSON.stringify(newHistory));
+      
+      const bestScore = parseInt(localStorage.getItem('bestScore') || '0', 10);
+      if (sessionData.score > bestScore) {
+        localStorage.setItem('bestScore', sessionData.score.toString());
+      }
+    } catch (error) {
+      console.error("Failed to save session:", error);
+      toast({
+        title: "Error",
+        description: "Could not save your session history.",
+        variant: "destructive",
+      });
     }
-  }, []);
+  }, [toast]);
 
   const handleTogglePractice = async (metronomeIsPlaying: boolean, startMetronome: (bpm: number) => Promise<AudioContext | null>, stopMetronome: () => void) => {
     if (metronomeIsPlaying) {
       stopMetronome();
       
+      const finalAccuracy = hits + misses > 0 ? Math.round((hits / (hits + misses)) * 100) : 0;
       const sessionData: PracticeSession = {
         id: new Date().toISOString(),
         date: Date.now(),
@@ -203,8 +224,8 @@ export default function Home() {
         score,
         hits,
         misses,
-        streak,
-        accuracy,
+        streak: bestStreak, // Use bestStreak for the session summary
+        accuracy: finalAccuracy,
         timings
       };
       setSession(sessionData);
@@ -212,7 +233,7 @@ export default function Home() {
 
       cleanupMic();
       if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
-        audioContextRef.current.close();
+        await audioContextRef.current.close();
         audioContextRef.current = null;
       }
       setStatus('idle');
@@ -230,9 +251,10 @@ export default function Home() {
           stopMetronome();
           cleanupMic();
           if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
-            audioContextRef.current.close();
+            await audioContextRef.current.close();
             audioContextRef.current = null;
           }
+           setStatus('idle');
         }
       } else {
         setStatus('error');
@@ -262,6 +284,8 @@ export default function Home() {
       }
     };
   }, [cleanupMic]);
+  
+  const currentBestStreak = Math.max(bestStreak, streak);
 
   const PracticeView = () => (
     <>
@@ -275,7 +299,7 @@ export default function Home() {
     <CardContent className="flex flex-col items-center gap-4 pt-2">
       <AudioVisualizer frequencyData={frequencyData} />
       <StatusIndicator status={status} />
-      <ResultsDisplay score={score} accuracy={accuracy} streak={streak} bestStreak={bestStreak} lastHitTime={lastHitTime} />
+      <ResultsDisplay score={score} accuracy={accuracy} streak={streak} bestStreak={currentBestStreak} lastHitTime={lastHitTime} />
       <Metronome
         onBeat={handleBeat}
         onBpmChange={setCurrentBpm}
@@ -358,3 +382,5 @@ const SummaryDisplay = ({ session }: { session: PracticeSession }) => (
       </div>
   </div>
 );
+
+    
