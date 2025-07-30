@@ -10,6 +10,7 @@ export type LogSettingsType = {
   metronome: boolean;
   onsets: boolean;
   hits: boolean;
+  velocity: boolean;
 };
 
 type LogSettingsProps = {
@@ -49,7 +50,17 @@ export default function LogSettings({ settings, onChange }: LogSettingsProps) {
                         onCheckedChange={(checked) => handleChange("onsets", !!checked)}
                     />
                     <Label htmlFor="log-onsets" className="font-normal cursor-pointer">
-                        Log Audio Onset/Velocity
+                        Log Audio Onsets
+                    </Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                    <Checkbox
+                        id="log-velocity"
+                        checked={settings.velocity}
+                        onCheckedChange={(checked) => handleChange("velocity", !!checked)}
+                    />
+                    <Label htmlFor="log-velocity" className="font-normal cursor-pointer">
+                        Log Audio Input Velocity
                     </Label>
                 </div>
                 <div className="flex items-center space-x-2">

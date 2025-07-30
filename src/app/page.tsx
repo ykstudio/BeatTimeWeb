@@ -45,6 +45,7 @@ export default function Home() {
     metronome: false,
     onsets: false,
     hits: true,
+    velocity: false,
   });
 
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -77,9 +78,11 @@ export default function Home() {
       setScore(s => s + 10);
       setStreak(s => s + 1);
       setHits(h => h + 1);
-      setLastHitTime(onsetTime); // For animation
+      setLastHitTime(onsetTime);
     } else {
-      if (logSettings.hits && isFinite(timingDeltaMs)) console.log(`Miss detected. Timing delta: ${timingDeltaMs.toFixed(2)}ms`);
+      if (logSettings.hits && isFinite(timingDeltaMs)) {
+        console.log(`Miss detected. Timing delta: ${timingDeltaMs.toFixed(2)}ms`);
+      }
       setStreak(0);
       setMisses(m => m + 1);
     }
@@ -173,7 +176,7 @@ export default function Home() {
 
   // Onset detection using audioLevel
   useEffect(() => {
-    if (logSettings.onsets) {
+    if (logSettings.velocity) {
       console.log(`Audio Level: ${audioLevel}`);
     }
     if (metronomeIsPlaying && audioContextRef.current) {
@@ -181,11 +184,12 @@ export default function Home() {
       const cooldown = 0.2; // 200ms cooldown to prevent multiple detections
 
       if (audioLevel >= ONSET_THRESHOLD && (currentTime - lastOnsetTimeRef.current > cooldown)) {
+        if(logSettings.onsets) console.log(`Onset detected at time: ${currentTime.toFixed(3)} with level: ${audioLevel}`);
         lastOnsetTimeRef.current = currentTime;
         processHit(currentTime);
       }
     }
-  }, [audioLevel, metronomeIsPlaying, processHit, logSettings.onsets]);
+  }, [audioLevel, metronomeIsPlaying, processHit, logSettings.onsets, logSettings.velocity]);
 
   useEffect(() => {
     return () => {
@@ -243,6 +247,7 @@ export default function Home() {
             initialBpm={currentBpm}
             onBpmChange={setCurrentBpm}
             isPlaying={metronomeIsPlaying}
+            logSettings={logSettings}
           />
         </CardContent>
         <CardFooter>
