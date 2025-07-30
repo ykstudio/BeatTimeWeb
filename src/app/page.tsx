@@ -18,7 +18,6 @@ export default function Home() {
 
   const stopPractice = useCallback(() => {
     console.log("page.tsx: stopPractice called");
-    setMetronomeIsPlaying(false);
     if (metronomeRef.current) {
         console.log("page.tsx: Calling metronomeRef.current.stop()");
         metronomeRef.current.stop();
@@ -32,6 +31,7 @@ export default function Home() {
     } else {
       console.log("page.tsx: No active AudioContext to close.");
     }
+    setMetronomeIsPlaying(false);
   }, []);
 
   const startPractice = useCallback(async () => {

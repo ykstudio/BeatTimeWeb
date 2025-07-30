@@ -32,7 +32,6 @@ const Metronome = forwardRef<MetronomeHandle, MetronomeProps>(({ onBeat, initial
         console.error("metronome.tsx: scheduleBeat called with no audioContextRef.current");
         return;
     };
-    console.log(`metronome.tsx: Scheduling beat ${beatNumber} at time ${time}`);
     
     const osc = audioContextRef.current.createOscillator();
     const envelope = audioContextRef.current.createGain();
@@ -48,15 +47,16 @@ const Metronome = forwardRef<MetronomeHandle, MetronomeProps>(({ onBeat, initial
   }, [timeSignature]);
 
   const scheduler = useCallback(() => {
-    if (!audioContextRef.current || !isPlaying) {
-      // This is expected to be called even when not playing, so no log here.
+    // The scheduler interval is cleared when isPlaying becomes false,
+    // so we can remove the check here to avoid stale state issues.
+    if (!audioContextRef.current) {
       return;
     }
     
     // Look ahead to schedule notes
     while (nextNoteTimeRef.current < audioContextRef.current.currentTime + 0.1) {
       const beatInBar = (beatCountRef.current % timeSignature) + 1;
-      console.log(`metronome.tsx: Scheduler is running. Next note time: ${nextNoteTimeRef.current}, Beat: ${beatInBar}`);
+      console.log(`metronome.tsx: Scheduler is running and scheduling beat ${beatInBar}`);
       onBeat(beatInBar, nextNoteTimeRef.current);
       setCurrentBeat(beatInBar);
       scheduleBeat(beatInBar, nextNoteTimeRef.current);
@@ -65,7 +65,32 @@ const Metronome = forwardRef<MetronomeHandle, MetronomeProps>(({ onBeat, initial
       nextNoteTimeRef.current += secondsPerBeat;
       beatCountRef.current++;
     }
-  }, [bpm, onBeat, scheduleBeat, timeSignature, isPlaying]);
+  }, [bpm, onBeat, scheduleBeat, timeSignature]);
+
+  useEffect(() => {
+    // This effect now correctly handles the starting and stopping of the scheduler
+    // based on the isPlaying prop.
+    if (isPlaying) {
+      if (schedulerTimerRef.current) {
+        clearInterval(schedulerTimerRef.current);
+      }
+      console.log("metronome.tsx: Starting scheduler interval because isPlaying is true.");
+      schedulerTimerRef.current = window.setInterval(scheduler, 25);
+    } else {
+      if (schedulerTimerRef.current) {
+        console.log("metronome.tsx: Clearing scheduler interval because isPlaying is false.");
+        clearInterval(schedulerTimerRef.current);
+        schedulerTimerRef.current = null;
+      }
+    }
+
+    return () => {
+      if (schedulerTimerRef.current) {
+        clearInterval(schedulerTimerRef.current);
+      }
+    };
+  }, [isPlaying, scheduler]);
+
 
   const start = useCallback((currentBpm: number, context: AudioContext) => {
     console.log(`metronome.tsx: Metronome.start called. BPM: ${currentBpm}, Context state: ${context.state}`);
@@ -76,23 +101,12 @@ const Metronome = forwardRef<MetronomeHandle, MetronomeProps>(({ onBeat, initial
     setBpm(currentBpm);
     audioContextRef.current = context;
     beatCountRef.current = 0;
-    nextNoteTimeRef.current = context.currentTime + 0.1;
-    
-    if (schedulerTimerRef.current) {
-        window.clearInterval(schedulerTimerRef.current);
-    }
-    
-    console.log("metronome.tsx: Starting scheduler interval.");
-    schedulerTimerRef.current = window.setInterval(scheduler, 25);
-  }, [scheduler]);
+    // Add a small delay to ensure the audio context is fully ready
+    nextNoteTimeRef.current = context.currentTime + 0.1; 
+  }, []);
 
   const stop = useCallback(() => {
     console.log("metronome.tsx: Metronome.stop called");
-    if (schedulerTimerRef.current) {
-      console.log("metronome.tsx: Clearing scheduler interval.");
-      clearInterval(schedulerTimerRef.current);
-      schedulerTimerRef.current = null;
-    }
     setCurrentBeat(0);
     onBeat(0, 0); // Signal that metronome has stopped
     // Do not close context here, it's managed by the parent page
@@ -104,14 +118,6 @@ const Metronome = forwardRef<MetronomeHandle, MetronomeProps>(({ onBeat, initial
       start,
       stop
   }));
-
-  useEffect(() => {
-    return () => {
-      if (schedulerTimerRef.current) {
-        clearInterval(schedulerTimerRef.current);
-      }
-    };
-  }, []);
 
   const handleBpmChange = (value: number[]) => {
     const newBpm = value[0];
