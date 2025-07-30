@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useRef, useCallback, useEffect } from 'react';
@@ -53,12 +54,13 @@ export default function Home() {
   const { toast } = useToast();
   
   const handleBeat = (beatNumber: number, time: number) => {
+    if (!audioContextRef.current) return;
     if (beatNumber > 0 && time > 0) {
       console.log(`page.tsx: Metronome beat ${beatNumber} at time ${time.toFixed(3)}`);
       beatTimesRef.current.push(time);
       // Check for misses: if a beat has passed without a hit, count it as a miss.
       // This is a simple implementation. More advanced logic could be added.
-      const now = audioContextRef.current?.currentTime ?? 0;
+      const now = audioContextRef.current.currentTime;
       if (beatTimesRef.current.length > 1) {
         const lastExpectedBeatTime = beatTimesRef.current[beatTimesRef.current.length - 2];
          if (now > lastExpectedBeatTime + TIMING_WINDOW && lastBeatIndexRef.current < beatTimesRef.current.length -1) {
@@ -72,7 +74,7 @@ export default function Home() {
   };
 
   const processOnsets = useCallback((audioBuffer: AudioBuffer) => {
-    if (!audioContextRef.current) return;
+    if (!audioContextRef.current || !metronomeIsPlaying) return;
 
     const now = audioContextRef.current.currentTime;
     // Debounce onsets to avoid multiple detections for a single note
@@ -103,16 +105,17 @@ export default function Home() {
         // setStreak(0);
       }
     }
-  }, []);
+  }, [metronomeIsPlaying]);
 
 
   const stopPractice = useCallback(() => {
     console.log("page.tsx: stopPractice called");
+    
+    setMetronomeIsPlaying(false);
     if (metronomeRef.current) {
         console.log("page.tsx: Calling metronomeRef.current.stop()");
         metronomeRef.current.stop();
     }
-    setMetronomeIsPlaying(false);
     
     stopVisualizer();
 
@@ -240,6 +243,12 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
+    if (streak > bestStreak) {
+      setBestStreak(streak);
+    }
+  }, [streak, bestStreak]);
+
+  useEffect(() => {
     localStorage.setItem('bestStreak', bestStreak.toString());
   }, [bestStreak]);
 
@@ -285,3 +294,5 @@ export default function Home() {
     </main>
   );
 }
+
+    
