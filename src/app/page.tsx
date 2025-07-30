@@ -164,13 +164,12 @@ export default function Home() {
         startVisualizer(context, source);
         
         // Setup ScriptProcessor for onset detection
-        // Note: createScriptProcessor is deprecated, but AudioWorklet is more complex to set up.
-        // For this prototype, ScriptProcessor is sufficient.
         const bufferSize = 1024;
         processorNodeRef.current = context.createScriptProcessor(bufferSize, 1, 1);
         processorNodeRef.current.onaudioprocess = (e) => processOnsets(e.inputBuffer);
         source.connect(processorNodeRef.current);
         processorNodeRef.current.connect(context.destination); // Connect to destination to keep it running
+        console.log("page.tsx: ScriptProcessorNode connected to destination.");
 
         console.log("page.tsx: Microphone setup complete.");
 
@@ -282,5 +281,3 @@ export default function Home() {
     </main>
   );
 }
-
-    
