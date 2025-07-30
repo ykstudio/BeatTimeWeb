@@ -73,7 +73,7 @@ export default function AudioAnalysisDisplay({ analysisData, logSettings }: Audi
             </div>
             <div className="bg-muted/50 rounded-lg p-4 flex flex-col justify-center items-center col-span-2">
                 <p className="text-sm text-muted-foreground">Timbre</p>
-                 <div className="w-24 h-24 mt-2 rounded-full transition-colors duration-200 border-4" style={{ backgroundColor: timbreColor, borderColor: timbreColor.replace(/(\\d+)(, \\d+%\\))$/, (match, p1, p2) => `${Math.max(0, parseInt(p1, 10) - 20)}${p2}`) }} />
+                 <div className="w-24 h-24 mt-2 rounded-full transition-colors duration-200 border-4" style={{ backgroundColor: timbreColor, borderColor: timbreColor.replace(/(\d+)(%\))$/, (match, p1) => `hsl(0, 0%, ${Math.max(0, parseInt(p1, 10) - 20)}%)`) }} />
             </div>
         </div>
       </CardContent>
