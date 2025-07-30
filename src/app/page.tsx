@@ -10,6 +10,7 @@ import StatusIndicator from '@/components/status-indicator';
 import AudioVisualizer from '@/components/audio-visualizer';
 import ResultsDisplay from '@/components/results-display';
 import { calculateAccuracy, TIMING_WINDOW } from '@/lib/audio';
+import { useAudioData } from '@/hooks/use-audio-data';
 
 export type PracticeSession = {
     score: number;
@@ -29,7 +30,6 @@ export default function Home() {
   const [metronomeIsPlaying, setMetronomeIsPlaying] = useState(false);
   const [currentBpm, setCurrentBpm] = useState(120);
   const [status, setStatus] = useState<Status>('idle');
-  const [audioData, setAudioData] = useState(new Uint8Array(0));
   
   // Practice results state
   const [score, setScore] = useState(0);
@@ -43,9 +43,8 @@ export default function Home() {
   const audioContextRef = useRef<AudioContext | null>(null);
   const metronomeRef = useRef<MetronomeHandle>(null);
   const micStreamRef = useRef<MediaStream | null>(null);
-  const analyserNodeRef = useRef<AnalyserNode | null>(null);
-  const animationFrameRef = useRef<number | null>(null);
   const processorNodeRef = useRef<ScriptProcessorNode | null>(null);
+  const { analyserNodeRef, audioData, start: startVisualizer, stop: stopVisualizer } = useAudioData();
   
   const beatTimesRef = useRef<number[]>([]);
   const lastBeatIndexRef = useRef(0);
@@ -55,16 +54,19 @@ export default function Home() {
   
   const handleBeat = (beatNumber: number, time: number) => {
     if (beatNumber > 0 && time > 0) {
+      console.log(`page.tsx: Metronome beat ${beatNumber} at time ${time.toFixed(3)}`);
       beatTimesRef.current.push(time);
       // Check for misses: if a beat has passed without a hit, count it as a miss.
       // This is a simple implementation. More advanced logic could be added.
       const now = audioContextRef.current?.currentTime ?? 0;
-      const expectedBeatTime = beatTimesRef.current[lastBeatIndexRef.current];
-      if (now > expectedBeatTime + TIMING_WINDOW) {
-          console.log(`page.tsx: Missed beat ${lastBeatIndexRef.current + 1}`);
-          setMisses(prev => prev + 1);
-          setStreak(0);
-          lastBeatIndexRef.current++;
+      if (beatTimesRef.current.length > 1) {
+        const lastExpectedBeatTime = beatTimesRef.current[beatTimesRef.current.length - 2];
+         if (now > lastExpectedBeatTime + TIMING_WINDOW && lastBeatIndexRef.current < beatTimesRef.current.length -1) {
+             console.log(`page.tsx: Missed beat ${lastBeatIndexRef.current + 1}`);
+             setMisses(prev => prev + 1);
+             setStreak(0);
+             lastBeatIndexRef.current++;
+         }
       }
     }
   };
@@ -93,25 +95,16 @@ export default function Home() {
         setStreak(prev => prev + 1);
         setScore(prev => prev + 10); // Simple scoring
         setLastHitTime(now); // For animation
+        lastBeatIndexRef.current = result.beatIndex;
       } else {
         // This logic might need refinement. If the onset is too far from any beat, is it a miss?
         // For now, we only register misses when a beat is passed without a hit.
         // setMisses(prev => prev + 1);
         // setStreak(0);
       }
-      lastBeatIndexRef.current = result.beatIndex;
-    }
-  }, [SENSITIVITY]);
-
-  const drawVisualizer = useCallback(() => {
-    if (analyserNodeRef.current) {
-        const bufferLength = analyserNodeRef.current.frequencyBinCount;
-        const dataArray = new Uint8Array(bufferLength);
-        analyserNodeRef.current.getByteTimeDomainData(dataArray);
-        setAudioData(dataArray);
-        animationFrameRef.current = requestAnimationFrame(drawVisualizer);
     }
   }, []);
+
 
   const stopPractice = useCallback(() => {
     console.log("page.tsx: stopPractice called");
@@ -119,13 +112,10 @@ export default function Home() {
         console.log("page.tsx: Calling metronomeRef.current.stop()");
         metronomeRef.current.stop();
     }
+    setMetronomeIsPlaying(false);
     
-    // Stop microphone processing
-    if (animationFrameRef.current) {
-        console.log("page.tsx: Stopping visualizer animation frame.");
-        cancelAnimationFrame(animationFrameRef.current);
-        animationFrameRef.current = null;
-    }
+    stopVisualizer();
+
     if (processorNodeRef.current) {
         console.log("page.tsx: Disconnecting ScriptProcessorNode.");
         processorNodeRef.current.disconnect();
@@ -136,7 +126,6 @@ export default function Home() {
         micStreamRef.current.getTracks().forEach(track => track.stop());
         micStreamRef.current = null;
     }
-    analyserNodeRef.current = null;
 
     if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
       console.log(`page.tsx: Closing AudioContext. Current state: ${audioContextRef.current.state}`);
@@ -151,10 +140,8 @@ export default function Home() {
     if (streak > bestStreak) {
         setBestStreak(streak);
     }
-
-    setMetronomeIsPlaying(false);
     setStatus('stopped');
-  }, [streak, bestStreak]);
+  }, [streak, bestStreak, stopVisualizer]);
 
   const startPractice = useCallback(async () => {
     console.log("page.tsx: startPractice called");
@@ -166,17 +153,10 @@ export default function Home() {
     setStreak(0);
     setHits(0);
     setMisses(0);
-    setAudioData(new Uint8Array(0));
-
 
     try {
-        if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
-            console.log("page.tsx: Creating new AudioContext");
-            const context = new (window.AudioContext || (window as any).webkitAudioContext)();
-            audioContextRef.current = context;
-        }
-        
-        const context = audioContextRef.current;
+        const context = new (window.AudioContext || (window as any).webkitAudioContext)();
+        audioContextRef.current = context;
         console.log(`page.tsx: AudioContext state is '${context.state}'`);
 
         if (context.state === 'suspended') {
@@ -192,10 +172,7 @@ export default function Home() {
         const source = context.createMediaStreamSource(stream);
         
         // Setup Analyser for visualization
-        analyserNodeRef.current = context.createAnalyser();
-        analyserNodeRef.current.fftSize = 2048;
-        source.connect(analyserNodeRef.current);
-        drawVisualizer();
+        startVisualizer(context, source);
         
         // Setup ScriptProcessor for onset detection
         const bufferSize = 1024;
@@ -226,7 +203,7 @@ export default function Home() {
       }
       stopPractice();
     }
-  }, [currentBpm, toast, drawVisualizer, processOnsets, stopPractice]);
+  }, [currentBpm, toast, processOnsets, stopPractice, startVisualizer]);
 
 
   const handleTogglePractice = async () => {

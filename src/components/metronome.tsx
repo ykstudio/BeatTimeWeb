@@ -53,7 +53,6 @@ const Metronome = forwardRef<MetronomeHandle, MetronomeProps>(({ onBeat, initial
     
     while (nextNoteTimeRef.current < audioContextRef.current.currentTime + 0.1) {
       const beatInBar = (beatCountRef.current % timeSignature) + 1;
-      console.log(`metronome.tsx: Scheduler is running and scheduling beat ${beatInBar}`);
       onBeat(beatInBar, nextNoteTimeRef.current);
       setCurrentBeat(beatInBar);
       scheduleBeat(beatInBar, nextNoteTimeRef.current);
@@ -69,11 +68,9 @@ const Metronome = forwardRef<MetronomeHandle, MetronomeProps>(({ onBeat, initial
       if (schedulerTimerRef.current) {
         clearInterval(schedulerTimerRef.current);
       }
-      console.log("metronome.tsx: Starting scheduler interval because isPlaying is true.");
       schedulerTimerRef.current = window.setInterval(scheduler, 25);
     } else {
       if (schedulerTimerRef.current) {
-        console.log("metronome.tsx: Clearing scheduler interval because isPlaying is false.");
         clearInterval(schedulerTimerRef.current);
         schedulerTimerRef.current = null;
       }
