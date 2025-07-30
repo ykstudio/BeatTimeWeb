@@ -1,10 +1,10 @@
 "use client";
 
 import { Badge } from "@/components/ui/badge";
-import { Mic, MicOff, LoaderCircle, AlertCircle, Music } from "lucide-react";
+import { Mic, MicOff, LoaderCircle, AlertCircle, Music, Square } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-type Status = 'idle' | 'requesting' | 'listening' | 'denied' | 'error';
+type Status = 'idle' | 'requesting' | 'listening' | 'denied' | 'error' | 'stopped';
 
 type StatusIndicatorProps = {
   status: Status;
@@ -36,6 +36,11 @@ export default function StatusIndicator({ status }: StatusIndicatorProps) {
       text: "An Error Occurred",
       icon: <AlertCircle className="h-4 w-4" />,
       variant: "destructive" as const,
+    },
+    stopped: {
+      text: "Practice Stopped",
+      icon: <Square className="h-4 w-4" />,
+      variant: "secondary" as const,
     },
   };
 
