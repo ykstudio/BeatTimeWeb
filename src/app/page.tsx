@@ -58,17 +58,6 @@ export default function Home() {
     if (beatNumber > 0 && time > 0) {
       console.log(`page.tsx: Metronome beat ${beatNumber} at time ${time.toFixed(3)}`);
       beatTimesRef.current.push(time);
-      // Check for misses: if a beat has passed without a hit, count it as a miss.
-      const now = audioContextRef.current.currentTime;
-      if (beatTimesRef.current.length > 1) {
-        const lastExpectedBeatTime = beatTimesRef.current[beatTimesRef.current.length - 2];
-         if (now > lastExpectedBeatTime + TIMING_WINDOW && lastBeatIndexRef.current < beatTimesRef.current.length -1) {
-             console.log(`page.tsx: Missed beat ${lastBeatIndexRef.current + 1}`);
-             setMisses(prev => prev + 1);
-             setStreak(0);
-             lastBeatIndexRef.current++;
-         }
-      }
     }
   };
 
@@ -97,13 +86,12 @@ export default function Home() {
         setLastHitTime(now); // For animation
         lastBeatIndexRef.current = result.beatIndex;
       } else {
-        // This logic might need refinement. If the onset is too far from any beat, is it a miss?
-        // For now, we only register misses when a beat is passed without a hit.
-        // setMisses(prev => prev + 1);
-        // setStreak(0);
+        // Only count a miss if an audible onset was detected but it was off-beat.
+        setMisses(prev => prev + 1);
+        setStreak(0);
       }
     }
-  }, [metronomeIsPlaying]);
+  }, [metronomeIsPlaying, hits, misses, score, streak]);
 
 
   const stopPractice = useCallback(() => {
@@ -176,6 +164,8 @@ export default function Home() {
         startVisualizer(context, source);
         
         // Setup ScriptProcessor for onset detection
+        // Note: createScriptProcessor is deprecated, but AudioWorklet is more complex to set up.
+        // For this prototype, ScriptProcessor is sufficient.
         const bufferSize = 1024;
         processorNodeRef.current = context.createScriptProcessor(bufferSize, 1, 1);
         processorNodeRef.current.onaudioprocess = (e) => processOnsets(e.inputBuffer);
@@ -281,7 +271,7 @@ export default function Home() {
           <Button
             onClick={handleTogglePractice}
             size="lg"
-            className="w-full sm:w-auto bg-accent text-accent-foreground hover:bg-accent/90 transition-all duration-300 transform active:scale-95"
+            className="w-full bg-accent text-accent-foreground hover:bg-accent/90 transition-all duration-300 transform active:scale-95"
             disabled={status === 'requesting'}
           >
             {metronomeIsPlaying ? <MicOff className="mr-2 h-5 w-5" /> : <Mic className="mr-2 h-5 w-5" />}
@@ -292,3 +282,5 @@ export default function Home() {
     </main>
   );
 }
+
+    
