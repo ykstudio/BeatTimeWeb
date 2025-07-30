@@ -47,13 +47,10 @@ const Metronome = forwardRef<MetronomeHandle, MetronomeProps>(({ onBeat, initial
   }, [timeSignature]);
 
   const scheduler = useCallback(() => {
-    // The scheduler interval is cleared when isPlaying becomes false,
-    // so we can remove the check here to avoid stale state issues.
     if (!audioContextRef.current) {
       return;
     }
     
-    // Look ahead to schedule notes
     while (nextNoteTimeRef.current < audioContextRef.current.currentTime + 0.1) {
       const beatInBar = (beatCountRef.current % timeSignature) + 1;
       console.log(`metronome.tsx: Scheduler is running and scheduling beat ${beatInBar}`);
@@ -68,8 +65,6 @@ const Metronome = forwardRef<MetronomeHandle, MetronomeProps>(({ onBeat, initial
   }, [bpm, onBeat, scheduleBeat, timeSignature]);
 
   useEffect(() => {
-    // This effect now correctly handles the starting and stopping of the scheduler
-    // based on the isPlaying prop.
     if (isPlaying) {
       if (schedulerTimerRef.current) {
         clearInterval(schedulerTimerRef.current);
@@ -99,17 +94,16 @@ const Metronome = forwardRef<MetronomeHandle, MetronomeProps>(({ onBeat, initial
         return;
     }
     setBpm(currentBpm);
+    onBpmChange(currentBpm);
     audioContextRef.current = context;
     beatCountRef.current = 0;
-    // Add a small delay to ensure the audio context is fully ready
     nextNoteTimeRef.current = context.currentTime + 0.1; 
-  }, []);
+  }, [onBpmChange]);
 
   const stop = useCallback(() => {
     console.log("metronome.tsx: Metronome.stop called");
     setCurrentBeat(0);
     onBeat(0, 0); // Signal that metronome has stopped
-    // Do not close context here, it's managed by the parent page
     audioContextRef.current = null; 
     console.log("metronome.tsx: Metronome stopped.");
   }, [onBeat]);
