@@ -2,7 +2,7 @@
 // For now, we'll simulate it, but this is where the core audio processing logic will go.
 
 export const TIMING_WINDOW = 0.2; // 200ms timing window (100ms before, 100ms after beat)
-export const DEFAULT_LATENCY = 0.37; // Default 370ms latency compensation based on observed timing
+export const DEFAULT_LATENCY = 0.13; // Default 130ms latency compensation based on observed timing
 
 export interface TimingResult {
   hit: boolean;

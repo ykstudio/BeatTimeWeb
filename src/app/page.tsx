@@ -44,7 +44,8 @@ export default function Home() {
   
   // Rhythm feedback state
   const [fourBeatAccuracy, setFourBeatAccuracy] = useState(0);
-  const [songGridColors, setSongGridColors] = useState<string[]>([]);
+  const [songGridData, setSongGridData] = useState<number[]>([]); // Individual beat timing scores
+  const [currentBeatNumber, setCurrentBeatNumber] = useState(0);
   const [currentMeasureHits, setCurrentMeasureHits] = useState(0);
   const [currentMeasureBeats, setCurrentMeasureBeats] = useState(0);
   const [currentMeasureTimingScores, setCurrentMeasureTimingScores] = useState<number[]>([]);
@@ -86,7 +87,7 @@ export default function Home() {
   });
 
   // Store latency in seconds internally for consistency with audio timing
-  const [latencyCompensation, setLatencyCompensation] = useState(0.37);
+  const [latencyCompensation, setLatencyCompensation] = useState(0.13);
 
   const [rhythmControls, setRhythmControls] = useState<RhythmControlsType>({
     hitContribution: 85,
@@ -122,6 +123,7 @@ export default function Home() {
   const lastBeatIndexRef = useRef(0);
   const lastOnsetTimeRef = useRef(0);
   const beatCountRef = useRef(0);
+  const beatQualityScores = useRef<number[]>([]); // Track timing quality for each beat
 
   const { toast } = useToast();
   
@@ -139,6 +141,11 @@ export default function Home() {
       beatTimesRef.current.push(time);
       beatCountRef.current += 1;
       setCurrentMeasureBeats(prev => prev + 1);
+      setCurrentBeatNumber(beatCountRef.current);
+      
+      // Initialize quality score for this beat (0 = no hit detected yet)
+      beatQualityScores.current.push(0);
+      
       if (logSettings.beats) {
         console.log(`🥁 BEAT ${beatNumber}: Total beats: ${beatCountRef.current}, Measure beat: ${(beatCountRef.current % 4) || 4}/4`);
       }
@@ -196,18 +203,10 @@ export default function Home() {
         
         setFourBeatAccuracy(measureAccuracy);
         
-        // Add this measure's color to the song grid
-        const colorClass = getAccuracyColorClass(measureAccuracy);
+        // Note: Individual beat timing scores are now added in processHit instead of here
         if (logSettings.songGrid) {
-          console.log(`🎨 Song Grid: Adding measure ${songGridColors.length + 1} with ${measureAccuracy}% accuracy, color: ${colorClass}`);
+          console.log(`🎨 Measure ${Math.floor(songGridData.length / 4) + 1} completed with ${measureAccuracy}% accuracy`);
         }
-        setSongGridColors(prev => {
-          const newColors = [...prev, colorClass];
-          if (logSettings.songGrid) {
-            console.log(`🗺️ Song Grid now has ${newColors.length} squares:`, newColors);
-          }
-          return newColors;
-        });
         
         // Reset measure counters
         setCurrentMeasureHits(0);
@@ -268,6 +267,19 @@ export default function Home() {
         currentMeasureTimingScoresRef.current = newScores;
         setCurrentMeasureTimingScores(newScores);
         
+        // Update beat quality score if this is better than what we have
+        const beatIndex = result.beatIndex - 1; // Convert to 0-based index
+        if (beatIndex >= 0 && beatIndex < beatQualityScores.current.length) {
+          beatQualityScores.current[beatIndex] = Math.max(beatQualityScores.current[beatIndex], timingQuality);
+          
+          // Update song grid with current beat quality scores
+          setSongGridData([...beatQualityScores.current]);
+          
+          if (logSettings.songGrid) {
+            console.log(`🎯 Updated beat ${beatIndex + 1} quality to ${beatQualityScores.current[beatIndex].toFixed(1)}%`);
+          }
+        }
+        
         // Update measure stats
         setMeasureStats(prev => ({
           totalHits: prev.totalHits + 1,
@@ -282,6 +294,23 @@ export default function Home() {
           `  RD: ${rawTimingDeltaMs.toFixed(1)}ms (raw)\n` +
           `  Quality: ${timingQuality.toFixed(1)}%`
         );
+        
+        // For off-beat hits, we can still record a low quality score to the nearest beat
+        // This gives visual feedback that something was detected, but not well-timed
+        const beatIndex = result.beatIndex - 1; // Convert to 0-based index
+        if (beatIndex >= 0 && beatIndex < beatQualityScores.current.length) {
+          // Only update if current score is 0 (no good hit recorded yet)
+          // Use a low quality score (10-30%) to indicate off-beat activity
+          const offBeatQuality = Math.min(30, timingQuality);
+          if (beatQualityScores.current[beatIndex] === 0) {
+            beatQualityScores.current[beatIndex] = offBeatQuality;
+            setSongGridData([...beatQualityScores.current]);
+            
+            if (logSettings.songGrid) {
+              console.log(`ℹ️ Recorded off-beat activity for beat ${beatIndex + 1}: ${offBeatQuality.toFixed(1)}%`);
+            }
+          }
+        }
         
         // Update measure stats but don't count as a good hit
         setMeasureStats(prev => ({
@@ -343,7 +372,9 @@ export default function Home() {
     setMisses(0);
     // Reset rhythm feedback state
     setFourBeatAccuracy(0);
-    setSongGridColors([]);
+    setSongGridData([]);
+    beatQualityScores.current = [];
+    setCurrentBeatNumber(0);
     setCurrentMeasureHits(0);
     setCurrentMeasureBeats(0);
     setCurrentMeasureTimingScores([]);
@@ -494,7 +525,7 @@ export default function Home() {
 
               {/* Practice Session Map */}
               <div className="w-full mt-2">                
-                <SongGrid songGridColors={songGridColors} />
+                <SongGrid songGridData={songGridData} currentBeat={currentBeatNumber} />
                 <div className="text-xs text-center text-muted-foreground mt-1">                  
                 </div>
               </div>

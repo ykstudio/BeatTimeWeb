@@ -69,9 +69,9 @@ export function DebugView({ visible, currentBeat, lastHitTiming, measureStats }:
               </div>
             </div>
 
-            <div className="col-span-2 border border-slate-700 rounded p-2">
-              <div className="text-slate-400 text-xs mb-1">Timing Scores</div>
-              <div className="flex flex-wrap gap-2">
+                          <div className="col-span-2 border border-slate-700 rounded p-2">
+                <div className="text-slate-400 text-xs mb-1">Timing Scores ({measureStats.timing.length})</div>
+                <div className="flex flex-wrap gap-1 max-h-32 overflow-y-auto">
                 {measureStats.timing.map((score, i) => {
                   const isOnBeat = score > 70;
                   return (
