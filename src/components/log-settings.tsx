@@ -15,6 +15,7 @@ export type LogSettingsType = {
   measures: boolean;
   timingQuality: boolean;
   songGrid: boolean;
+  performanceMode: boolean;  // When true, disables heavy visualizations
 };
 
 type LogSettingsProps = {
@@ -48,6 +49,16 @@ export default function LogSettings({ settings, onChange }: LogSettingsProps) {
                 </div>
             </AccordionTrigger>
             <AccordionContent className="flex flex-col gap-4 pt-4">
+                <div className="flex items-center space-x-2 pb-2 mb-2 border-b">
+                    <Checkbox
+                        id="performance-mode"
+                        checked={settings.performanceMode}
+                        onCheckedChange={(checked) => handleChange("performanceMode", !!checked)}
+                    />
+                    <Label htmlFor="performance-mode" className="font-medium cursor-pointer text-green-600">
+                        Performance Mode (Recommended)
+                    </Label>
+                </div>
                 <div className="flex items-center space-x-2 pb-2 border-b">
                     <Checkbox
                         id="log-mark-all"
@@ -55,7 +66,7 @@ export default function LogSettings({ settings, onChange }: LogSettingsProps) {
                         onCheckedChange={(checked) => handleMarkAll(!!checked)}
                     />
                     <Label htmlFor="log-mark-all" className="font-medium cursor-pointer">
-                        Mark All
+                        Mark All Debug Logs
                     </Label>
                 </div>
                 <div className="flex items-center space-x-2">

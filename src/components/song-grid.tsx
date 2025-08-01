@@ -6,12 +6,12 @@ type SongGridProps = {
   songGridColors: string[];
 };
 
-// Convert accuracy percentage to color class
+// Convert beat accuracy to color class
 function getAccuracyColorClass(accuracy: number): string {
-  if (accuracy >= 80) return 'bg-green-500';
-  if (accuracy >= 60) return 'bg-yellow-500';
-  if (accuracy >= 40) return 'bg-orange-500';
-  return 'bg-red-500';
+  // Simplified color scheme focusing on on-beat vs off-beat
+  if (accuracy >= 75) return 'bg-green-500';  // Good on-beat playing (3-4 beats hit accurately)
+  if (accuracy >= 40) return 'bg-yellow-500'; // Mixed timing (1-2 beats hit accurately)
+  return 'bg-red-500';                        // Poor timing or off-beat
 }
 
 export default function SongGrid({ songGridColors }: SongGridProps) {
@@ -40,9 +40,25 @@ export default function SongGrid({ songGridColors }: SongGridProps) {
           );
         })}
       </div>
-      <div className="text-center">
-        <p className="text-sm font-medium">{songGridColors.length} / {totalSquares}</p>
-        <p className="text-xs text-muted-foreground">Measures Completed</p>
+      <div className="flex flex-col gap-2 items-center">
+        <div className="flex gap-4 items-center">
+          <div className="flex items-center gap-1">
+            <div className="w-3 h-3 bg-green-500 rounded-sm" />
+            <span className="text-xs">On Beat (3-4 beats)</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <div className="w-3 h-3 bg-yellow-500 rounded-sm" />
+            <span className="text-xs">Mixed (1-2 beats)</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <div className="w-3 h-3 bg-red-500 rounded-sm" />
+            <span className="text-xs">Off Beat</span>
+          </div>
+        </div>
+        <div className="text-center">
+          <p className="text-sm font-medium">{songGridColors.length} / {totalSquares}</p>
+          <p className="text-xs text-muted-foreground">Measures Completed</p>
+        </div>
       </div>
     </div>
   );

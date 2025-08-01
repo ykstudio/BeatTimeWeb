@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useRef, useCallback, useEffect } from 'react';
@@ -16,19 +15,18 @@ import RhythmControls, { RhythmControlsType } from '@/components/rhythm-controls
 import AudioAnalysisDisplay from '@/components/audio-analysis-display';
 import RhythmMatrix from '@/components/rhythm-matrix';
 import SongGrid from '@/components/song-grid';
+import { DebugView } from '@/components/debug-view';
 
 export type PracticeSession = {
-    score: number;
-    accuracy: number;
-    streak: number;
-    hits: number;
-    misses: number;
-    bpm: number;
+  score: number;
+  accuracy: number;
+  streak: number;
+  hits: number;
+  misses: number;
+  bpm: number;
 };
 
 type Status = 'idle' | 'requesting' | 'listening' | 'denied' | 'error' | 'stopped';
-
-const ONSET_THRESHOLD = 1; // Audio level threshold to trigger a note onset - Made more sensitive for testing
 
 export default function Home() {
   const [metronomeIsPlaying, setMetronomeIsPlaying] = useState(false);
@@ -52,6 +50,29 @@ export default function Home() {
   const [currentMeasureTimingScores, setCurrentMeasureTimingScores] = useState<number[]>([]);
   const currentMeasureTimingScoresRef = useRef<number[]>([]);
   
+  // Debug state
+  const [lastHitTiming, setLastHitTiming] = useState<{
+    delta: number;
+    rawDelta: number;
+    quality: number;
+    isOnBeat: boolean;
+  }>({
+    delta: 0,
+    rawDelta: 0,
+    quality: 0,
+    isOnBeat: false
+  });
+  
+  const [measureStats, setMeasureStats] = useState<{
+    totalHits: number;
+    goodHits: number;
+    timing: number[];
+  }>({
+    totalHits: 0,
+    goodHits: 0,
+    timing: []
+  });
+
   const [logSettings, setLogSettings] = useState<LogSettingsType>({
     metronome: true,
     onsets: true,
@@ -61,7 +82,11 @@ export default function Home() {
     measures: true,
     timingQuality: true,
     songGrid: true,
+    performanceMode: true,  // Enable performance mode by default
   });
+
+  // Store latency in seconds internally for consistency with audio timing
+  const [latencyCompensation, setLatencyCompensation] = useState(0.37);
 
   const [rhythmControls, setRhythmControls] = useState<RhythmControlsType>({
     hitContribution: 85,
@@ -127,38 +152,26 @@ export default function Home() {
           console.log(`📈 Current streak: ${streak}, hits: ${hits}, misses: ${misses}`);
         }
         
-        // Calculate measure accuracy using hit/miss contributions from rhythm controls
+        // Calculate measure accuracy focusing on beat alignment
         let measureAccuracy = 0;
         const timingScores = currentMeasureTimingScoresRef.current;
         
         if (timingScores.length > 0) {
-          // Calculate based on hit/miss contributions (much simpler and more predictable)
-          let totalContribution = 0;
-          let hitCount = 0;
-          let missCount = 0;
+          // Count how many beats were hit with good timing
+          const goodHits = timingScores.filter(score => score > 70).length;
           
-          timingScores.forEach(score => {
-            if (score > 0) {
-              // This was a hit - use hit contribution
-              totalContribution += rhythmControls.hitContribution;
-              hitCount++;
-            } else {
-              // This was a miss - use miss contribution
-              totalContribution += rhythmControls.missContribution;
-              missCount++;
-            }
-          });
+          // Calculate accuracy based on hitting the 4 beats of the measure
+          measureAccuracy = Math.round((goodHits / 4) * 100);
           
-          measureAccuracy = Math.round(totalContribution / timingScores.length);
           if (logSettings.measures) {
-            console.log(`🎯 Measure calculation: ${hitCount} hits (${rhythmControls.hitContribution}% each) + ${missCount} misses (${rhythmControls.missContribution}% each) = ${measureAccuracy}%`);
+            console.log(`🎯 Beat accuracy: ${goodHits}/4 beats hit accurately (${measureAccuracy}%)`);
+            console.log(`   Timing scores: ${timingScores.map(s => s.toFixed(1)).join(', ')}`);
           }
         } else {
-          // No beats detected in this measure - use empty measure defaults
-          const sessionAccuracy = hits > 0 ? Math.round((hits / (hits + misses)) * 100) : 0;
-          measureAccuracy = Math.max(rhythmControls.emptyMeasureMin, Math.min(rhythmControls.emptyMeasureMax, sessionAccuracy));
+          // No beats detected in this measure
+          measureAccuracy = 0;
           if (logSettings.measures) {
-            console.log(`❌ No beats in measure, using empty measure default: ${measureAccuracy}%`);
+            console.log(`❌ No beats detected in measure`);
           }
         }
         
@@ -180,7 +193,6 @@ export default function Home() {
             console.log(`⬆️ Streak bonus: ${originalAccuracy}% -> ${measureAccuracy}%`);
           }
         }
-        // Configurable bonuses - adjust via controls to find perfect balance
         
         setFourBeatAccuracy(measureAccuracy);
         
@@ -207,47 +219,90 @@ export default function Home() {
     }
   }, [logSettings.metronome, hits, misses, streak, getAccuracyColorClass]);
 
-  const processHit = useCallback((onsetTime: number) => {
-    const result = calculateAccuracy(onsetTime, beatTimesRef.current, lastBeatIndexRef.current);
-    const timingDeltaMs = result.timing * 1000;
+  // Log test pattern reminder at the start of each session
+  useEffect(() => {
+    if (metronomeIsPlaying) {
+      console.log(`
+🎯 Test Pattern:
+1-4:  ON  ON  ON  ON  (on-beat)
+5-8:  OFF OFF OFF OFF (off-beat)
+----------------------------------------`);
+    }
+  }, [metronomeIsPlaying]);
 
-    if (result.hit) {
-        if (logSettings.hits) console.log(`Hit detected! Timing delta: ${timingDeltaMs.toFixed(2)}ms`);
+  const processHit = useCallback((onsetTime: number) => {
+    const result = calculateAccuracy(onsetTime, beatTimesRef.current, lastBeatIndexRef.current, latencyCompensation);
+    const timingDeltaMs = result.timing * 1000;
+    const rawTimingDeltaMs = result.rawTiming * 1000;
+    // Consider hits within 100ms of the compensated beat as on-beat hits
+    const isOnBeat = Math.abs(timingDeltaMs) < 100;
+
+    // Calculate timing quality (0-100)
+    const timingQuality = Math.max(0, 100 - (Math.abs(result.timing) / rhythmControls.timingWindow) * 100);
+
+    // Update debug info with both raw and compensated timing
+    setLastHitTiming({
+      delta: timingDeltaMs,
+      rawDelta: rawTimingDeltaMs,
+      quality: timingQuality,
+      isOnBeat: isOnBeat && result.hit
+    });
+
+    if (result.hit && isOnBeat) {
+        // This is a good hit on the main beat
+        if (logSettings.hits) console.log(
+          `🎯 On-beat hit!\n` +
+          `  CD: ${timingDeltaMs.toFixed(1)}ms (compensated)\n` +
+          `  RD: ${rawTimingDeltaMs.toFixed(1)}ms (raw)\n` +
+          `  Quality: ${timingQuality.toFixed(1)}%`
+        );
+        
         setScore(s => s + 10);
         setStreak(s => s + 1);
         setHits(h => h + 1);
         setCurrentMeasureHits(prev => prev + 1);
         setLastHitTime(onsetTime);
         
-        // Calculate timing quality score (0-100) based on how close to perfect timing
-        const timingQuality = Math.max(0, 100 - (Math.abs(result.timing) / rhythmControls.timingWindow) * 100);
-        setCurrentMeasureTimingScores(prev => {
-          const newScores = [...prev, timingQuality];
-          currentMeasureTimingScoresRef.current = newScores;
-          if (logSettings.timingQuality) {
-            console.log(`🎯 HIT: Timing delta: ${(result.timing * 1000).toFixed(1)}ms, Quality: ${timingQuality.toFixed(1)}%, Total scores in measure: ${newScores.length}`);
-          }
-          return newScores;
-        });
+        // Update timing scores once
+        const newScores = [...currentMeasureTimingScoresRef.current, timingQuality];
+        currentMeasureTimingScoresRef.current = newScores;
+        setCurrentMeasureTimingScores(newScores);
+        
+        // Update measure stats
+        setMeasureStats(prev => ({
+          totalHits: prev.totalHits + 1,
+          goodHits: prev.goodHits + 1,
+          timing: [...prev.timing, timingQuality]
+        }));
+    } else if (result.hit) {
+        // This is a hit but between main beats
+        if (logSettings.hits) console.log(
+          `ℹ️ Off-beat hit:\n` +
+          `  CD: ${timingDeltaMs.toFixed(1)}ms (compensated)\n` +
+          `  RD: ${rawTimingDeltaMs.toFixed(1)}ms (raw)\n` +
+          `  Quality: ${timingQuality.toFixed(1)}%`
+        );
+        
+        // Update measure stats but don't count as a good hit
+        setMeasureStats(prev => ({
+          totalHits: prev.totalHits + 1,
+          goodHits: prev.goodHits,
+          timing: prev.timing
+        }));
     } else {
-        if (logSettings.hits && isFinite(timingDeltaMs)) {
-            console.log(`Miss detected. Timing delta: ${timingDeltaMs.toFixed(2)}ms`);
-        }
+        // Complete miss
+        if (logSettings.hits) console.log(`❌ Miss: ${timingDeltaMs.toFixed(1)}ms`);
         setStreak(0);
         setMisses(m => m + 1);
-        // Add 0 score for missed beats
-        setCurrentMeasureTimingScores(prev => {
-          const newScores = [...prev, 0];
-          currentMeasureTimingScoresRef.current = newScores;
-          if (logSettings.timingQuality) {
-            console.log(`❌ MISS: Added 0% quality score, Total scores in measure: ${newScores.length}`);
-          }
-          return newScores;
-        });
+        
+        // Update timing scores once for miss
+        const newScores = [...currentMeasureTimingScoresRef.current, 0];
+        currentMeasureTimingScoresRef.current = newScores;
+        setCurrentMeasureTimingScores(newScores);
     }
     lastBeatIndexRef.current = result.beatIndex;
 
-  }, [logSettings.hits]);
+  }, [logSettings.hits, latencyCompensation]);
 
   const stopPractice = useCallback(() => {
     setMetronomeIsPlaying(false);
@@ -293,6 +348,19 @@ export default function Home() {
     setCurrentMeasureBeats(0);
     setCurrentMeasureTimingScores([]);
     currentMeasureTimingScoresRef.current = [];
+    
+    // Reset debug state
+    setLastHitTiming({
+      delta: 0,
+      rawDelta: 0,
+      quality: 0,
+      isOnBeat: false
+    });
+    setMeasureStats({
+      totalHits: 0,
+      goodHits: 0,
+      timing: []
+    });
 
     try {
         const context = new (window.AudioContext || (window as any).webkitAudioContext)();
@@ -423,50 +491,75 @@ export default function Home() {
                 {metronomeIsPlaying ? <MicOff className="mr-2 h-5 w-5" /> : <Mic className="mr-2 h-5 w-5" />}
                 <span className="font-bold">{metronomeIsPlaying ? 'Stop Practice' : 'Start Practice'}</span>
               </Button>
+
+              {/* Practice Session Map */}
+              <div className="w-full mt-2">                
+                <SongGrid songGridColors={songGridColors} />
+                <div className="text-xs text-center text-muted-foreground mt-1">                  
+                </div>
+              </div>
               
               {/* Rhythm Controls inside main window */}
-              <div className="w-full">
+              <div className="w-full mt-4">
                 <RhythmControls controls={rhythmControls} onChange={setRhythmControls} />
               </div>
             </CardContent>
           </Card>
         </div>
     
-    <div className="lg:col-span-2 flex flex-col gap-4">
-      {/* Rhythm Feedback Section */}
-      <Card className="w-full shadow-lg">
-        <CardHeader>
-          <CardTitle className="text-xl font-bold text-center">Rhythm Feedback</CardTitle>
-          <CardDescription className="text-center">Measure-by-measure accuracy tracking</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="flex justify-center">
-              <RhythmMatrix fourBeatAccuracy={fourBeatAccuracy} />
-            </div>
-            <div className="flex flex-col items-center gap-2">
-              <h3 className="text-sm font-medium text-muted-foreground">Practice Session Map</h3>
-              <SongGrid songGridColors={songGridColors} />
-              <div className="text-xs text-muted-foreground">
-                {songGridColors.length} / 256
-                <br />
-                Measures Completed
+        <div className="lg:col-span-2 flex flex-col gap-4">
+          {/* Debug View at the top */}
+          <DebugView 
+            visible={logSettings.timingQuality}
+            currentBeat={(beatCountRef.current % 4) || 4}
+            lastHitTiming={lastHitTiming}
+            measureStats={measureStats}
+          />
+
+          {/* Rhythm Feedback Section */}
+          <Card className="w-full shadow-lg">
+            <CardHeader>
+              <CardTitle className="text-xl font-bold text-center">Rhythm Feedback</CardTitle>
+              <CardDescription className="text-center">Measure-by-measure accuracy tracking</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="mb-4 space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-medium">Latency Compensation</span>
+                  <span className="text-sm text-muted-foreground">{Math.round(latencyCompensation * 1000)}ms</span>
+                </div>
+                <input
+                  type="range"
+                  min="0"
+                  max="500"
+                  step="10"
+                  value={latencyCompensation * 1000}
+                  onChange={(e) => setLatencyCompensation(Number(e.target.value) / 1000)}
+                  className="w-full"
+                />
+                <div className="flex justify-between text-xs text-muted-foreground">
+                  <span>0ms</span>
+                  <span>250ms</span>
+                  <span>500ms</span>
+                </div>
               </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-      
-      <AudioAnalysisDisplay 
-        analysisData={audioAnalysisData}
-        logSettings={logSettings}
-      />
-      
-      <div className="w-full flex justify-center">
+              <div className="flex flex-col items-center gap-4">
+                <RhythmMatrix fourBeatAccuracy={fourBeatAccuracy} />
+                <div className="w-full">
+                  <AudioAnalysisDisplay 
+                    analysisData={audioAnalysisData}
+                    logSettings={logSettings}
+                  />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          
+          <div className="w-full">
             <LogSettings settings={logSettings} onChange={setLogSettings} />
+          </div>
+        </div>
       </div>
-    </div>
-  </div>
-</main>
-);
+    </main>
+  );
 }

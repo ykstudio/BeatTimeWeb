@@ -44,6 +44,22 @@ function getTimbreColor(centroid: number): string {
 
 export default function AudioAnalysisDisplay({ analysisData, logSettings }: AudioAnalysisDisplayProps) {
   const { frequencyData, dominantFrequency, audioLevel, spectralCentroid } = analysisData;
+  
+  // In performance mode, only show the velocity meter
+  if (logSettings.performanceMode) {
+    return (        
+        <CardContent className="flex flex-col items-center gap-4">
+          <VelocityMeter audioLevel={audioLevel} />
+          {logSettings.velocity && (
+            <div className="text-xs text-muted-foreground">
+              Raw Velocity: {audioLevel}
+            </div>
+          )}
+        </CardContent>      
+    );
+  }
+
+  // Full analysis display when not in performance mode
   const noteName = frequencyToNoteName(dominantFrequency);
   const timbreColor = getTimbreColor(spectralCentroid);
 

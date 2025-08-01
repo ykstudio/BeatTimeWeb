@@ -1,7 +1,15 @@
 // This is a placeholder for a more sophisticated onset detection.
 // For now, we'll simulate it, but this is where the core audio processing logic will go.
 
-export const TIMING_WINDOW = 0.2; // 200ms timing window (100ms before, 100ms after beat) - Balanced for good gameplay
+export const TIMING_WINDOW = 0.2; // 200ms timing window (100ms before, 100ms after beat)
+export const DEFAULT_LATENCY = 0.37; // Default 370ms latency compensation based on observed timing
+
+export interface TimingResult {
+  hit: boolean;
+  timing: number;
+  rawTiming: number; // Before latency compensation
+  beatIndex: number;
+}
 
 export function detectOnsets(
   audioBuffer: AudioBuffer,
@@ -27,24 +35,43 @@ export function calculateAccuracy(
   onsetTime: number,
   beatTimes: number[],
   lastBeatIndex: number,
-) {
+  latencyCompensation: number = DEFAULT_LATENCY
+): TimingResult {
+  // Apply latency compensation
+  const adjustedOnsetTime = onsetTime - latencyCompensation;
+
   for (let i = lastBeatIndex; i < beatTimes.length; i++) {
     const beatTime = beatTimes[i];
-    const timingDifference = onsetTime - beatTime;
+    const rawTiming = onsetTime - beatTime;
+    const timingDifference = adjustedOnsetTime - beatTime;
     
-    if (Math.abs(timingDifference) <= TIMING_WINDOW) {
-      // It's a hit
-      return { hit: true, timing: timingDifference, beatIndex: i + 1 };
-    } else if (onsetTime < beatTime - TIMING_WINDOW) {
-      // User played too early for this beat, and we assume they won't hit a previous beat again.
-      // This case might mean they missed the previous beat and are early for the current one.
-      // We'll consider it a miss for the beat they are closest to but outside the window.
-      // If they are very early, we just wait for the next onset.
-      return { hit: false, timing: timingDifference, beatIndex: i };
+    // For on-beat detection, check if timing is near the beat point (0ms or 500ms)
+    const isNearBeat = Math.abs(timingDifference) <= TIMING_WINDOW;
+    
+    if (isNearBeat) {
+      // It's a hit - either on-beat or intentionally off-beat
+      return { 
+        hit: true, 
+        timing: timingDifference,
+        rawTiming: rawTiming,
+        beatIndex: i + 1 
+      };
+    } else if (adjustedOnsetTime < beatTime - TIMING_WINDOW) {
+      // User played too early for this beat
+      return { 
+        hit: false, 
+        timing: timingDifference,
+        rawTiming: rawTiming,
+        beatIndex: i 
+      };
     }
-    // If the onset is after the current beat's window, check the next beat.
   }
   
-  // Onset didn't fall into any future beat window.
-  return { hit: false, timing: Infinity, beatIndex: lastBeatIndex };
+  // Onset didn't fall into any future beat window
+  return { 
+    hit: false, 
+    timing: Infinity,
+    rawTiming: Infinity,
+    beatIndex: lastBeatIndex 
+  };
 }
