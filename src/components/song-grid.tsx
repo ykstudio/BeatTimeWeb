@@ -7,17 +7,46 @@ type SongGridProps = {
   currentBeat?: number; // Current beat index (1-based) to highlight
 };
 
-// Convert timing quality to green opacity style
-function getTimingQualityStyle(quality: number): { backgroundColor: string; opacity: number } {
+// Convert timing quality to solid color with glow effects
+function getTimingQualityStyle(quality: number): { 
+  backgroundColor: string; 
+  opacity: number; 
+  boxShadow?: string; 
+} {
   // Clamp quality between 0 and 100
   const clampedQuality = Math.max(0, Math.min(100, quality));
   // Convert to opacity (0-100% -> 0.0-1.0)
-  const opacity = clampedQuality / 100;
+  const opacity = Math.max(0.1, clampedQuality / 100); // Minimum 10% opacity for visibility
   
-  return {
-    backgroundColor: 'rgb(34, 197, 94)', // green-500 equivalent
-    opacity: opacity
-  };
+  // Solid green colors for perfect beats (85%+) - as requested
+  if (clampedQuality >= 95) {
+    // Perfect: bright green #0f0
+    return {
+      backgroundColor: '#0f0',
+      opacity: 1,
+      boxShadow: 'inset 0 0 1px 2px #fff, 0 0 4px #0f0'
+    };
+  } else if (clampedQuality >= 85) {
+    // Excellent: medium green #0d0  
+    return {
+      backgroundColor: '#0d0',
+      opacity: 1,
+      boxShadow: 'inset 0 0 1px 2px #fff, 0 0 3px #0d0'
+    };
+  } else if (clampedQuality >= 70) {
+    // Good: darker green #0c0
+    return {
+      backgroundColor: '#0c0',
+      opacity: 1,
+      boxShadow: 'inset 0 0 1px 2px #fff, 0 0 2px #0c0'
+    };
+  } else {
+    // Regular green for lower quality beats
+    return {
+      backgroundColor: 'rgb(34, 197, 94)', // green-500
+      opacity: opacity
+    };
+  }
 }
 
 export default function SongGrid({ songGridData, currentBeat }: SongGridProps) {
@@ -42,13 +71,23 @@ export default function SongGrid({ songGridData, currentBeat }: SongGridProps) {
           
           if (isCurrentBeat) {
             // Current beat: blinking border animation
-            style = quality > 0 ? getTimingQualityStyle(quality) : { backgroundColor: 'rgb(229, 231, 235)', opacity: 0.8 }; // gray-200
+            const currentStyle = quality > 0 ? getTimingQualityStyle(quality) : { backgroundColor: 'rgb(229, 231, 235)', opacity: 0.8 }; // gray-200
+            style = {
+              backgroundColor: currentStyle.backgroundColor,
+              opacity: currentStyle.opacity,
+              boxShadow: currentStyle.boxShadow
+            };
             className += " border-2 border-blue-500 animate-pulse";
           } else if (hasData && isBeatPassed) {
             // Beat has been played
             if (quality > 0) {
               // Had a hit
-              style = getTimingQualityStyle(quality);
+              const hitStyle = getTimingQualityStyle(quality);
+              style = {
+                backgroundColor: hitStyle.backgroundColor,
+                opacity: hitStyle.opacity,
+                boxShadow: hitStyle.boxShadow
+              };
               className += " border border-gray-300";
             } else {
               // No hit detected (missed beat)
@@ -80,14 +119,25 @@ export default function SongGrid({ songGridData, currentBeat }: SongGridProps) {
         })}
       </div>
       <div className="flex flex-col gap-2 items-center">
-        <div className="flex gap-3 items-center text-xs">
+        <div className="flex gap-2 items-center text-xs flex-wrap justify-center">
           <div className="flex items-center gap-1">
             <div className="w-3 h-3 border-2 border-blue-500 rounded-sm animate-pulse" style={{ backgroundColor: 'rgb(229, 231, 235)', opacity: 0.8 }} />
             <span>Current</span>
           </div>
           <div className="flex items-center gap-1">
+            <div 
+              className="w-3 h-3 border border-gray-300 rounded-sm" 
+              style={{ 
+                backgroundColor: '#0f0', 
+                opacity: 1.0,
+                boxShadow: 'inset 0 0 1px 2px #fff, 0 0 4px #0f0'
+              }} 
+            />
+            <span>Perfect</span>
+          </div>
+          <div className="flex items-center gap-1">
             <div className="w-3 h-3 border border-gray-300 rounded-sm" style={{ backgroundColor: 'rgb(34, 197, 94)', opacity: 0.8 }} />
-            <span>Hit</span>
+            <span>Good</span>
           </div>
           <div className="flex items-center gap-1">
             <div className="w-3 h-3 border border-gray-400 rounded-sm" style={{ backgroundColor: 'rgb(209, 213, 219)', opacity: 0.6 }} />

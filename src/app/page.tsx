@@ -16,6 +16,7 @@ import AudioAnalysisDisplay from '@/components/audio-analysis-display';
 import RhythmMatrix from '@/components/rhythm-matrix';
 import SongGrid from '@/components/song-grid';
 import { DebugView } from '@/components/debug-view';
+import AudioWaveform from '@/components/audio-waveform';
 
 export type PracticeSession = {
   score: number;
@@ -546,6 +547,19 @@ export default function Home() {
             lastHitTiming={lastHitTiming}
             measureStats={measureStats}
           />
+
+          {/* Audio Waveform below debug view */}
+          {logSettings.timingQuality && (
+            <AudioWaveform 
+              audioData={audioAnalysisData}
+              isActive={metronomeIsPlaying}
+              beatTimes={beatTimesRef.current}
+              beatQualities={beatQualityScores.current}
+              latencyCompensation={latencyCompensation}
+              bpm={currentBpm}
+              currentBeat={currentBeatNumber}
+            />
+          )}
 
           {/* Rhythm Feedback Section */}
           <Card className="w-full shadow-lg">
