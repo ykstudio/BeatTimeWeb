@@ -1,7 +1,7 @@
 // This is a placeholder for a more sophisticated onset detection.
 // For now, we'll simulate it, but this is where the core audio processing logic will go.
 
-export const TIMING_WINDOW = 0.1; // 100ms timing window (50ms before, 50ms after beat)
+export const TIMING_WINDOW = 0.2; // 200ms timing window (100ms before, 100ms after beat) - Balanced for good gameplay
 
 export function detectOnsets(
   audioBuffer: AudioBuffer,

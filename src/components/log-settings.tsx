@@ -11,6 +11,10 @@ export type LogSettingsType = {
   onsets: boolean;
   hits: boolean;
   velocity: boolean;
+  beats: boolean;
+  measures: boolean;
+  timingQuality: boolean;
+  songGrid: boolean;
 };
 
 type LogSettingsProps = {
@@ -23,6 +27,17 @@ export default function LogSettings({ settings, onChange }: LogSettingsProps) {
     onChange({ ...settings, [key]: checked });
   };
 
+  const allChecked = Object.values(settings).every(Boolean);
+  const someChecked = Object.values(settings).some(Boolean);
+
+  const handleMarkAll = (checked: boolean) => {
+    const newSettings = Object.keys(settings).reduce((acc, key) => {
+      acc[key as keyof LogSettingsType] = checked;
+      return acc;
+    }, {} as LogSettingsType);
+    onChange(newSettings);
+  };
+
   return (
     <Accordion type="single" collapsible className="w-full max-w-md mt-4">
         <AccordionItem value="log-settings" className="border rounded-lg px-4">
@@ -33,6 +48,16 @@ export default function LogSettings({ settings, onChange }: LogSettingsProps) {
                 </div>
             </AccordionTrigger>
             <AccordionContent className="flex flex-col gap-4 pt-4">
+                <div className="flex items-center space-x-2 pb-2 border-b">
+                    <Checkbox
+                        id="log-mark-all"
+                        checked={allChecked}
+                        onCheckedChange={(checked) => handleMarkAll(!!checked)}
+                    />
+                    <Label htmlFor="log-mark-all" className="font-medium cursor-pointer">
+                        Mark All
+                    </Label>
+                </div>
                 <div className="flex items-center space-x-2">
                     <Checkbox
                         id="log-metronome"
@@ -71,6 +96,46 @@ export default function LogSettings({ settings, onChange }: LogSettingsProps) {
                     />
                     <Label htmlFor="log-hits" className="font-normal cursor-pointer">
                         Log Hit/Miss Detection
+                    </Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                    <Checkbox
+                        id="log-beats"
+                        checked={settings.beats}
+                        onCheckedChange={(checked) => handleChange("beats", !!checked)}
+                    />
+                    <Label htmlFor="log-beats" className="font-normal cursor-pointer">
+                        Log Beat Detection
+                    </Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                    <Checkbox
+                        id="log-measures"
+                        checked={settings.measures}
+                        onCheckedChange={(checked) => handleChange("measures", !!checked)}
+                    />
+                    <Label htmlFor="log-measures" className="font-normal cursor-pointer">
+                        Log Measure Completion
+                    </Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                    <Checkbox
+                        id="log-timing-quality"
+                        checked={settings.timingQuality}
+                        onCheckedChange={(checked) => handleChange("timingQuality", !!checked)}
+                    />
+                    <Label htmlFor="log-timing-quality" className="font-normal cursor-pointer">
+                        Log Timing Quality Scores
+                    </Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                    <Checkbox
+                        id="log-song-grid"
+                        checked={settings.songGrid}
+                        onCheckedChange={(checked) => handleChange("songGrid", !!checked)}
+                    />
+                    <Label htmlFor="log-song-grid" className="font-normal cursor-pointer">
+                        Log Song Grid Updates
                     </Label>
                 </div>
             </AccordionContent>
