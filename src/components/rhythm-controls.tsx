@@ -136,7 +136,7 @@ export default function RhythmControls({ controls, onChange }: RhythmControlsPro
                   <Label className="text-sm">Onset Threshold</Label>
                   <span className="text-xs text-muted-foreground">Audio level needed to detect a hit</span>
                 </div>
-                <span className="text-xs text-muted-foreground">{controls.onsetThreshold.toFixed(1)}</span>
+                <span className="text-xs font-mono bg-blue-100 px-2 py-1 rounded text-blue-800">{controls.onsetThreshold.toFixed(1)}</span>
               </div>
               <Slider
                 value={[controls.onsetThreshold]}

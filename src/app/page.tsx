@@ -12,6 +12,9 @@ import { useAudioData, type AudioAnalysisData } from '@/hooks/use-audio-data';
 import { calculateAccuracy, TIMING_WINDOW } from '@/lib/audio';
 import LogSettings, { LogSettingsType } from '@/components/log-settings';
 import RhythmControls, { RhythmControlsType } from '@/components/rhythm-controls';
+import { InstrumentSelector } from '@/components/instrument-selector';
+import { InstrumentDataCollector } from '@/components/instrument-data-collector';
+import { AutoDetectionStatus } from '@/components/auto-detection-status';
 import AudioAnalysisDisplay from '@/components/audio-analysis-display';
 import RhythmMatrix from '@/components/rhythm-matrix';
 import SongGrid from '@/components/song-grid';
@@ -116,15 +119,33 @@ export default function Home() {
     frequencyData: new Uint8Array(0),
     dominantFrequency: 0,
     spectralCentroid: 0,
+    instrumentLevel: 0,
+    instrumentFrequency: 0,
+    instrumentConfidence: 0,
+    selectedInstrument: 'auto',
+    detectedInstrument: 'auto',
+    detectionConfidence: 0,
+    detectionBreakdown: {},
   });
 
-  const { start: startVisualizer, stop: stopVisualizer } = useAudioData(setAudioAnalysisData);
+  const { 
+    start: startVisualizer, 
+    stop: stopVisualizer, 
+    selectedInstrument, 
+    setSelectedInstrument 
+  } = useAudioData(setAudioAnalysisData);
   
   const beatTimesRef = useRef<number[]>([]);
   const lastBeatIndexRef = useRef(0);
   const lastOnsetTimeRef = useRef(0);
   const beatCountRef = useRef(0);
   const beatQualityScores = useRef<number[]>([]); // Track timing quality for each beat
+
+  // 4-beat averaging for auto-detection - stable instrument decisions
+  const beatDetectionsRef = useRef<Array<{instrument: string, confidence: number, beatNumber: number}>>([]);
+  const [stableDetectedInstrument, setStableDetectedInstrument] = useState<string>('auto');
+  const [stableDetectionConfidence, setStableDetectionConfidence] = useState<number>(0);
+  const lastDecisionBeat = useRef<number>(0);
 
   const { toast } = useToast();
   
@@ -149,6 +170,16 @@ export default function Home() {
       
       if (logSettings.beats) {
         console.log(`🥁 BEAT ${beatNumber}: Total beats: ${beatCountRef.current}, Measure beat: ${(beatCountRef.current % 4) || 4}/4`);
+      }
+      
+      // COLLECT DETECTION DATA PER BEAT (for stable auto-detection)
+      if (selectedInstrument === 'auto') {
+        // DEBUG: Log state to understand the timing issue
+        console.log(`🔍 BEAT ${beatCountRef.current} DEBUG: detectedInstrument=${audioAnalysisData.detectedInstrument}, confidence=${audioAnalysisData.detectionConfidence}`);
+        
+        // TEMPORARY FIX: Skip beat-based collection entirely since React state is stale
+        // Instead, the 4-beat decision will use the most recent detections from onsets
+        console.log(`⏸️ BEAT ${beatCountRef.current}: Auto mode - using onset-based detection instead of beat-based`);
       }
       
       // Every 4 beats (end of measure), calculate accuracy and update song grid
@@ -209,6 +240,50 @@ export default function Home() {
           console.log(`🎨 Measure ${Math.floor(songGridData.length / 4) + 1} completed with ${measureAccuracy}% accuracy`);
         }
         
+        // 4-BEAT INSTRUMENT DECISION (every measure - stable decisions)
+        if (selectedInstrument === 'auto') {
+          const recentDetections = beatDetectionsRef.current.slice(-4); // Last 4 beats
+          
+          console.log(`🔍 STABLE DETECTION ANALYSIS:`);
+          console.log(`   Total detections in buffer: ${beatDetectionsRef.current.length}`);
+          console.log(`   Recent detections (last 4): ${recentDetections.length}`);
+          console.log(`   Current stable instrument: ${stableDetectedInstrument} (confidence: ${(stableDetectionConfidence * 100).toFixed(1)}%)`);
+          
+          if (recentDetections.length >= 2) { // At least 2 beats with detections
+            // Find the most confident detection from recent beats
+            const bestDetection = recentDetections.reduce((best, current) => 
+              current.confidence > best.confidence ? current : best
+            );
+            
+            console.log(`📊 4-BEAT DECISION CYCLE:`);
+            console.log(`   Detections: ${recentDetections.map(d => `${d.instrument}(${(d.confidence * 100).toFixed(0)}%)`).join(', ')}`);
+            console.log(`   🏆 BEST: ${bestDetection.instrument} with ${(bestDetection.confidence * 100).toFixed(1)}% confidence`);
+            console.log(`   📊 Current real-time detection: ${audioAnalysisData.detectedInstrument} (${(audioAnalysisData.detectionConfidence * 100).toFixed(1)}%)`);
+            
+            // Update stable detection if confidence is high enough
+            if (bestDetection.confidence >= 0.45) {
+              if (stableDetectedInstrument !== bestDetection.instrument) {
+                console.log(`🎯 INSTRUMENT DECISION: Switching from ${stableDetectedInstrument} to ${bestDetection.instrument}`);
+                setStableDetectedInstrument(bestDetection.instrument);
+                setStableDetectionConfidence(bestDetection.confidence);
+                lastDecisionBeat.current = beatCountRef.current;
+              } else {
+                console.log(`✅ CONFIRMED: Staying with ${stableDetectedInstrument} (confidence: ${(bestDetection.confidence * 100).toFixed(1)}%)`);
+                setStableDetectionConfidence(bestDetection.confidence); // Update confidence even if instrument stays the same
+              }
+            } else {
+              console.log(`❌ NOT CONFIDENT ENOUGH: Staying with ${stableDetectedInstrument} (needed 35%, got ${(bestDetection.confidence * 100).toFixed(1)}%)`);
+            }
+          } else {
+            console.log(`⏳ WAITING: Only ${recentDetections.length} detections in last 4 beats (need at least 2)`);
+          }
+          
+          // Keep only recent detections (sliding window)
+          const beforeCleanup = beatDetectionsRef.current.length;
+          beatDetectionsRef.current = beatDetectionsRef.current.slice(-8); // Keep last 8 beats
+          console.log(`🧹 Cleanup: ${beforeCleanup} -> ${beatDetectionsRef.current.length} detections in buffer`);
+        }
+        
         // Reset measure counters
         setCurrentMeasureHits(0);
         setCurrentMeasureBeats(0);
@@ -217,7 +292,7 @@ export default function Home() {
         console.log(`🔄 Reset measure counters\n`);
       }
     }
-  }, [logSettings.metronome, hits, misses, streak, getAccuracyColorClass]);
+  }, [logSettings.metronome, logSettings.beats, logSettings.measures, logSettings.songGrid, hits, misses, streak, getAccuracyColorClass, audioAnalysisData, selectedInstrument, stableDetectedInstrument, stableDetectionConfidence, rhythmControls]);
 
   // Log test pattern reminder at the start of each session
   useEffect(() => {
@@ -451,9 +526,21 @@ export default function Home() {
         if(logSettings.onsets) console.log(`Onset detected at time: ${onsetTime.toFixed(3)} with level: ${audioAnalysisData.audioLevel}`);
         lastOnsetTimeRef.current = onsetTime;
         processHit(onsetTime);
+        
+        // COLLECT AUTO-DETECTION DATA FROM ONSETS (more reliable than beat-based)
+        if (selectedInstrument === 'auto' && audioAnalysisData.detectedInstrument !== 'auto') {
+          // Add to beat detections buffer from onset (where we have real-time data)
+          beatDetectionsRef.current.push({
+            instrument: audioAnalysisData.detectedInstrument,
+            confidence: audioAnalysisData.detectionConfidence,
+            beatNumber: beatCountRef.current
+          });
+          
+          console.log(`🎯 ONSET #${Date.now()} in AUTO mode: detected=${audioAnalysisData.detectedInstrument} confidence=${(audioAnalysisData.detectionConfidence * 100).toFixed(1)}% - ADDED to beatDetectionsRef (${beatDetectionsRef.current.length} total)`);
+        }
       }
     }
-  }, [audioAnalysisData.audioLevel, metronomeIsPlaying, processHit, logSettings.onsets]);
+  }, [audioAnalysisData.audioLevel, metronomeIsPlaying, processHit, logSettings.onsets, selectedInstrument, audioAnalysisData.detectedInstrument, audioAnalysisData.detectionConfidence]);
 
   useEffect(() => {
     return () => {
@@ -485,6 +572,19 @@ export default function Home() {
       localStorage.setItem('bestStreak', streak.toString());
     }
   }, [streak, bestStreak]);
+
+  // Reset stable detection when manually changing instrument
+  useEffect(() => {
+    if (selectedInstrument !== 'auto') {
+      console.log(`🔄 MANUAL INSTRUMENT SWITCH: Resetting stable detection (was ${stableDetectedInstrument})`);
+      setStableDetectedInstrument('auto');
+      setStableDetectionConfidence(0);
+      beatDetectionsRef.current = [];
+    } else {
+      console.log(`🎯 AUTO MODE ACTIVATED: Starting stable instrument detection`);
+      console.log(`   Current real-time detection: ${audioAnalysisData.detectedInstrument} (${(audioAnalysisData.detectionConfidence * 100).toFixed(1)}%)`);
+    }
+  }, [selectedInstrument, stableDetectedInstrument, audioAnalysisData.detectedInstrument, audioAnalysisData.detectionConfidence]);
 
   return (
     <main className="container mx-auto p-4">
@@ -531,6 +631,23 @@ export default function Home() {
                 </div>
               </div>
               
+              {/* Data Collection Status */}
+              <div className="w-full mt-4">
+                <InstrumentDataCollector 
+                  selectedInstrument={selectedInstrument}
+                  isRecording={metronomeIsPlaying}
+                  beatCount={beatCountRef.current}
+                />
+              </div>
+              
+              {/* Instrument Selector */}
+              <div className="w-full mt-4">
+                <InstrumentSelector 
+                  selectedInstrument={selectedInstrument}
+                  onInstrumentChange={setSelectedInstrument}
+                />
+              </div>
+              
               {/* Rhythm Controls inside main window */}
               <div className="w-full mt-4">
                 <RhythmControls controls={rhythmControls} onChange={setRhythmControls} />
@@ -542,13 +659,31 @@ export default function Home() {
         <div className="lg:col-span-2 flex flex-col gap-4">
           {/* Debug View at the top */}
           <DebugView 
-            visible={logSettings.timingQuality}
+            visible={true}
             currentBeat={(beatCountRef.current % 4) || 4}
             lastHitTiming={lastHitTiming}
             measureStats={measureStats}
+            audioAnalysis={audioAnalysisData ? {
+              audioLevel: audioAnalysisData.audioLevel,
+              instrumentLevel: audioAnalysisData.instrumentLevel,
+              instrumentFrequency: audioAnalysisData.instrumentFrequency,
+              instrumentConfidence: audioAnalysisData.instrumentConfidence,
+              selectedInstrument: selectedInstrument,
+              onsetThreshold: rhythmControls.onsetThreshold
+            } : undefined}
           />
 
-          {/* Audio Waveform below debug view */}
+          {/* Auto-Detection Status above audio waveform */}
+          <AutoDetectionStatus 
+            audioData={{
+              ...audioAnalysisData,
+              detectedInstrument: stableDetectedInstrument,
+              detectionConfidence: stableDetectionConfidence
+            }}
+            onInstrumentSelect={setSelectedInstrument}
+          />
+
+          {/* Audio Waveform below auto detection */}
           {logSettings.timingQuality && (
             <AudioWaveform 
               audioData={audioAnalysisData}

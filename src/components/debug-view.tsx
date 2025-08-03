@@ -16,9 +16,18 @@ export interface DebugViewProps {
     goodHits: number;
     timing: number[];
   };
+  // New frequency analysis data
+  audioAnalysis?: {
+    audioLevel: number;
+    instrumentLevel: number;
+    instrumentFrequency: number;
+    instrumentConfidence: number;
+    selectedInstrument: string;
+    onsetThreshold: number;
+  };
 }
 
-export function DebugView({ visible, currentBeat, lastHitTiming, measureStats }: DebugViewProps) {
+export function DebugView({ visible, currentBeat, lastHitTiming, measureStats, audioAnalysis }: DebugViewProps) {
   if (!visible) return null;
   
   return (
@@ -93,6 +102,45 @@ export function DebugView({ visible, currentBeat, lastHitTiming, measureStats }:
                 })}
               </div>
             </div>
+
+            {/* Frequency Analysis Debug */}
+            {audioAnalysis && (
+              <div className="col-span-2 border border-slate-700 rounded p-2">
+                <div className="text-slate-400 text-xs mb-2">🎵 Frequency Analysis ({audioAnalysis.selectedInstrument})</div>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div>
+                    <div className="text-slate-300">Audio Level:</div>
+                    <div className={`${audioAnalysis.audioLevel > audioAnalysis.onsetThreshold ? 'text-green-400' : 'text-slate-400'}`}>
+                      {audioAnalysis.audioLevel.toFixed(1)} / {audioAnalysis.onsetThreshold.toFixed(1)}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-slate-300">Instrument Level:</div>
+                    <div className={`${audioAnalysis.instrumentLevel > audioAnalysis.onsetThreshold ? 'text-green-400' : 'text-slate-400'}`}>
+                      {audioAnalysis.instrumentLevel.toFixed(1)} / {audioAnalysis.onsetThreshold.toFixed(1)}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-slate-300">Confidence:</div>
+                    <div className={`${audioAnalysis.instrumentConfidence > 0.3 ? 'text-green-400' : 'text-yellow-400'}`}>
+                      {(audioAnalysis.instrumentConfidence * 100).toFixed(1)}%
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-slate-300">Dom. Freq:</div>
+                    <div className="text-blue-400">
+                      {audioAnalysis.instrumentFrequency.toFixed(0)}Hz
+                    </div>
+                  </div>
+                </div>
+                <div className="mt-2 text-xs">
+                  <div className="text-slate-300">Detection Method:</div>
+                  <div className={`${audioAnalysis.instrumentConfidence > 0.3 ? 'text-green-400' : 'text-orange-400'}`}>
+                    {audioAnalysis.instrumentConfidence > 0.3 ? '🎯 Instrument-Specific' : '🔊 General Audio'}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </CardContent>

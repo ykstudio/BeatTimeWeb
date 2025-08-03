@@ -1,6 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/utils";
+import { useRef } from "react";
 
 type SongGridProps = {
   songGridData: number[]; // Array of timing quality scores (0-100) for individual beats
@@ -11,40 +12,40 @@ type SongGridProps = {
 function getTimingQualityStyle(quality: number): { 
   backgroundColor: string; 
   opacity: number; 
-  boxShadow?: string; 
 } {
   // Clamp quality between 0 and 100
   const clampedQuality = Math.max(0, Math.min(100, quality));
-  // Convert to opacity (0-100% -> 0.0-1.0)
-  const opacity = Math.max(0.1, clampedQuality / 100); // Minimum 10% opacity for visibility
   
-  // Solid green colors for perfect beats (85%+) - as requested
+  // Solid green gradient based on quality - no shadows
   if (clampedQuality >= 95) {
-    // Perfect: bright green #0f0
+    // Perfect: brightest green
     return {
-      backgroundColor: '#0f0',
+      backgroundColor: '#00ff00', // bright green
       opacity: 1,
-      boxShadow: 'inset 0 0 1px 2px #fff, 0 0 4px #0f0'
     };
   } else if (clampedQuality >= 85) {
-    // Excellent: medium green #0d0  
+    // Excellent: bright green
     return {
-      backgroundColor: '#0d0',
+      backgroundColor: '#22c55e', // green-500
       opacity: 1,
-      boxShadow: 'inset 0 0 1px 2px #fff, 0 0 3px #0d0'
     };
   } else if (clampedQuality >= 70) {
-    // Good: darker green #0c0
+    // Good: medium green
     return {
-      backgroundColor: '#0c0',
+      backgroundColor: '#16a34a', // green-600
       opacity: 1,
-      boxShadow: 'inset 0 0 1px 2px #fff, 0 0 2px #0c0'
+    };
+  } else if (clampedQuality >= 50) {
+    // Fair: darker green
+    return {
+      backgroundColor: '#15803d', // green-700
+      opacity: 1,
     };
   } else {
-    // Regular green for lower quality beats
+    // Poor: darkest green
     return {
-      backgroundColor: 'rgb(34, 197, 94)', // green-500
-      opacity: opacity
+      backgroundColor: '#166534', // green-800
+      opacity: 1,
     };
   }
 }
@@ -54,6 +55,9 @@ export default function SongGrid({ songGridData, currentBeat }: SongGridProps) {
   const gridSize = 16;
   const totalSquares = gridSize * gridSize;
   
+  // 4-beat averaging for auto-detection
+  const beatDetectionsRef = useRef<Array<{instrument: string, confidence: number, beatNumber: number}>>([]);
+
   return (
     <div className="flex flex-col items-center justify-center gap-2 w-full max-w-sm">
       <p className="text-sm font-medium text-muted-foreground">Beat Quality Map</p>
@@ -75,7 +79,6 @@ export default function SongGrid({ songGridData, currentBeat }: SongGridProps) {
             style = {
               backgroundColor: currentStyle.backgroundColor,
               opacity: currentStyle.opacity,
-              boxShadow: currentStyle.boxShadow
             };
             className += " border-2 border-blue-500 animate-pulse";
           } else if (hasData && isBeatPassed) {
@@ -86,7 +89,6 @@ export default function SongGrid({ songGridData, currentBeat }: SongGridProps) {
               style = {
                 backgroundColor: hitStyle.backgroundColor,
                 opacity: hitStyle.opacity,
-                boxShadow: hitStyle.boxShadow
               };
               className += " border border-gray-300";
             } else {
@@ -128,9 +130,8 @@ export default function SongGrid({ songGridData, currentBeat }: SongGridProps) {
             <div 
               className="w-3 h-3 border border-gray-300 rounded-sm" 
               style={{ 
-                backgroundColor: '#0f0', 
+                backgroundColor: '#00ff00', 
                 opacity: 1.0,
-                boxShadow: 'inset 0 0 1px 2px #fff, 0 0 4px #0f0'
               }} 
             />
             <span>Perfect</span>
