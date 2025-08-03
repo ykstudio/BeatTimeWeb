@@ -128,13 +128,13 @@ export interface InstrumentSignature {
 
 export const INSTRUMENT_SIGNATURES: Record<string, InstrumentSignature> = {
   bass: {
-    // From analysis: Working well, pure low-frequency energy signature
-    spectralCentroidRange: [100, 200],
-    dominantBandEnergy: ['sub', 'bass'],
-    harmonicClarity: 0.3, // Weak harmonics as observed
-    zcrRange: [400, 700], // Stable, low ZCR
-    crestFactorRange: [0.01, 0.02], // Very low crest factor (sustained)
-    confidenceWeights: { centroid: 0.40, bands: 0.40, harmonics: 0.10, zcr: 0.05, crest: 0.05 }
+    // UPDATED: Expanded range to catch lower bass frequencies (from test data analysis)
+    spectralCentroidRange: [50, 300], // Expanded down to catch low E (41Hz) and up for higher frets
+    dominantBandEnergy: ['sub', 'bass', 'lowMid'], // Added lowMid for higher bass notes
+    harmonicClarity: 0.4, // Slightly increased - bass can have some harmonics
+    zcrRange: [20, 800], // Expanded range for different playing techniques
+    crestFactorRange: [0.01, 0.25], // Expanded for punchy bass playing
+    confidenceWeights: { centroid: 0.50, bands: 0.30, harmonics: 0.10, zcr: 0.05, crest: 0.05 } // Emphasize centroid for bass
   },
   guitar: {
     // MAJOR REWRITE: Based on analysis showing rich harmonics but misclassified as bass
@@ -194,7 +194,7 @@ export function detectInstrumentType(
   // STAGE 1: Quick frequency-based filtering to eliminate impossible matches
   const candidates: string[] = [];
   
-  if (spectralCentroid < 300 && frequencyBands.bass?.energy > totalEnergy * 0.3) {
+  if (spectralCentroid < 400 && (frequencyBands.sub?.energy > totalEnergy * 0.2 || frequencyBands.bass?.energy > totalEnergy * 0.25)) {
     candidates.push('bass');
   }
   if (spectralCentroid > 4000 && frequencyBands.brilliance?.energy > totalEnergy * 0.4) {
@@ -340,20 +340,60 @@ export function detectInstrumentType(
   
   // STAGE 4: Confidence thresholding with instrument-specific thresholds
   const instrumentThresholds = {
-    bass: 0.40,     // Working well, keep lower threshold
-    guitar: 0.50,   // Needs higher threshold due to complexity
-    voice: 0.45,    // Moderate threshold
+    bass: 0.30,     // Lowered - bass detection was working but not confident enough
+    guitar: 0.40,   // Lowered - guitar detection was working but getting overridden
+    voice: 0.45,    // Keep moderate threshold
     shaker: 0.40,   // Working well
     clap: 0.50      // New instrument, higher threshold
   };
   
   const threshold = instrumentThresholds[bestMatch as keyof typeof instrumentThresholds] || confidenceThreshold;
   
-  if (bestConfidence >= threshold) {
-    return { instrument: bestMatch, confidence: bestConfidence, breakdown: bestBreakdown };
+  // Create a comprehensive breakdown with all instrument scores
+  const allScores: Record<string, number> = {};
+  for (const instrument of candidates) {
+    const signature = INSTRUMENT_SIGNATURES[instrument];
+    if (signature) {
+      // Quick re-calculation for all instruments to get their scores
+      let score = 0;
+      
+      // Spectral centroid score
+      const centroidRange = signature.spectralCentroidRange;
+      let centroidScore = 0;
+      if (spectralCentroid >= centroidRange[0] && spectralCentroid <= centroidRange[1]) {
+        centroidScore = 1.0;
+      } else {
+        const distance = Math.min(
+          Math.abs(spectralCentroid - centroidRange[0]) / centroidRange[0],
+          Math.abs(spectralCentroid - centroidRange[1]) / centroidRange[1]
+        );
+        centroidScore = Math.max(0, 1.0 - distance * 0.5);
+      }
+      score += centroidScore * signature.confidenceWeights.centroid;
+      
+      // Band energy score
+      let bandScore = 0;
+      for (const bandName of signature.dominantBandEnergy) {
+        const band = frequencyBands[bandName];
+        if (band) {
+          const bandRatio = band.energy / totalEnergy;
+          bandScore += Math.min(1.0, bandRatio * 4);
+        }
+      }
+      score += Math.min(1.0, bandScore) * signature.confidenceWeights.bands;
+      
+      allScores[instrument] = score;
+    }
   }
   
-  return { instrument: 'auto', confidence: bestConfidence, breakdown: bestBreakdown };
+  // Add all scores to breakdown for access in the UI
+  const enhancedBreakdown = { ...bestBreakdown, ...allScores };
+  
+  if (bestConfidence >= threshold) {
+    return { instrument: bestMatch, confidence: bestConfidence, breakdown: enhancedBreakdown };
+  }
+  
+  return { instrument: 'auto', confidence: bestConfidence, breakdown: enhancedBreakdown };
 }
 
 export interface TimingResult {

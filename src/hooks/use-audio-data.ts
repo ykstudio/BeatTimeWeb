@@ -144,7 +144,11 @@ export function useAudioData(setAudioAnalysisData: Dispatch<SetStateAction<Audio
     );
     
     // Persistence: Only update if we have a CONFIDENT valid detection (ignore auto results)
-    if (currentDetection.instrument !== 'auto' && currentDetection.confidence > 0.25) {
+    // Lower threshold for guitar/bass to capture their detections better
+    const isStringInstrument = currentDetection.instrument === 'guitar' || currentDetection.instrument === 'bass';
+    const confidenceThreshold = isStringInstrument ? 0.15 : 0.25; // Lower threshold for string instruments
+    
+    if (currentDetection.instrument !== 'auto' && currentDetection.confidence > confidenceThreshold) {
       lastDetectionRef.current = currentDetection;
       console.log(`🎯 STABLE UPDATE: ${currentDetection.instrument} (${(currentDetection.confidence * 100).toFixed(1)}%)`);
     }

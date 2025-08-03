@@ -254,30 +254,68 @@ export default function Home() {
           console.log(`   Recent detections (last 4): ${recentDetections.length}`);
           console.log(`   Current stable instrument: ${stableDetectedInstrument} (confidence: ${(stableDetectionConfidence * 100).toFixed(1)}%)`);
           
-          if (recentDetections.length >= 2) { // At least 2 beats with detections
-            // Find the most confident detection from recent beats
-            const bestDetection = recentDetections.reduce((best, current) => 
-              current.confidence > best.confidence ? current : best
-            );
+          if (recentDetections.length >= 1) { // At least 1 detection (was 2)
+            // Group detections by instrument and calculate weighted confidence
+            const instrumentGroups = recentDetections.reduce((groups, detection) => {
+              if (!groups[detection.instrument]) {
+                groups[detection.instrument] = [];
+              }
+              groups[detection.instrument].push(detection);
+              return groups;
+            }, {} as Record<string, typeof recentDetections>);
+            
+            // Calculate weighted scores for each instrument
+            const instrumentScores = Object.entries(instrumentGroups).map(([instrument, detections]) => {
+              // For guitar and bass, prioritize high-confidence detections more heavily
+              const isStringInstrument = instrument === 'guitar' || instrument === 'bass';
+              const avgConfidence = detections.reduce((sum, d) => sum + d.confidence, 0) / detections.length;
+              const maxConfidence = Math.max(...detections.map(d => d.confidence));
+              const count = detections.length;
+              
+              // Weight calculation: favor consistency + high peak confidence for string instruments
+              let weightedScore = avgConfidence;
+              if (isStringInstrument && maxConfidence > 1.0) { // Guitar/bass often have >100% confidence
+                weightedScore = Math.max(avgConfidence, maxConfidence * 0.8); // Boost high-confidence detections
+              }
+              
+              return {
+                instrument,
+                avgConfidence,
+                maxConfidence,
+                count,
+                weightedScore,
+                detections
+              };
+            }).sort((a, b) => b.weightedScore - a.weightedScore);
+            
+            const bestInstrument = instrumentScores[0];
             
             console.log(`📊 4-BEAT DECISION CYCLE:`);
             console.log(`   Detections: ${recentDetections.map(d => `${d.instrument}(${(d.confidence * 100).toFixed(0)}%)`).join(', ')}`);
-            console.log(`   🏆 BEST: ${bestDetection.instrument} with ${(bestDetection.confidence * 100).toFixed(1)}% confidence`);
+            console.log(`   📈 Instrument Scores:`);
+            instrumentScores.forEach(score => {
+              console.log(`      ${score.instrument}: avg=${(score.avgConfidence * 100).toFixed(1)}% max=${(score.maxConfidence * 100).toFixed(1)}% count=${score.count} weighted=${(score.weightedScore * 100).toFixed(1)}%`);
+            });
+            console.log(`   🏆 BEST: ${bestInstrument.instrument} with ${(bestInstrument.weightedScore * 100).toFixed(1)}% weighted score`);
             console.log(`   📊 Current real-time detection: ${audioAnalysisData.detectedInstrument} (${(audioAnalysisData.detectionConfidence * 100).toFixed(1)}%)`);
             
+            // Lower threshold for guitar/bass, higher for others
+            const isStringInstrument = bestInstrument.instrument === 'guitar' || bestInstrument.instrument === 'bass';
+            const confidenceThreshold = isStringInstrument ? 0.35 : 0.45; // Lower threshold for string instruments
+            
             // Update stable detection if confidence is high enough
-            if (bestDetection.confidence >= 0.45) {
-              if (stableDetectedInstrument !== bestDetection.instrument) {
-                console.log(`🎯 INSTRUMENT DECISION: Switching from ${stableDetectedInstrument} to ${bestDetection.instrument}`);
-                setStableDetectedInstrument(bestDetection.instrument);
-                setStableDetectionConfidence(bestDetection.confidence);
+            if (bestInstrument.weightedScore >= confidenceThreshold) {
+              if (stableDetectedInstrument !== bestInstrument.instrument) {
+                console.log(`🎯 INSTRUMENT DECISION: Switching from ${stableDetectedInstrument} to ${bestInstrument.instrument} (threshold: ${(confidenceThreshold * 100).toFixed(0)}%)`);
+                setStableDetectedInstrument(bestInstrument.instrument);
+                setStableDetectionConfidence(bestInstrument.weightedScore);
                 lastDecisionBeat.current = beatCountRef.current;
               } else {
-                console.log(`✅ CONFIRMED: Staying with ${stableDetectedInstrument} (confidence: ${(bestDetection.confidence * 100).toFixed(1)}%)`);
-                setStableDetectionConfidence(bestDetection.confidence); // Update confidence even if instrument stays the same
+                console.log(`✅ CONFIRMED: Staying with ${stableDetectedInstrument} (confidence: ${(bestInstrument.weightedScore * 100).toFixed(1)}%)`);
+                setStableDetectionConfidence(bestInstrument.weightedScore); // Update confidence even if instrument stays the same
               }
             } else {
-              console.log(`❌ NOT CONFIDENT ENOUGH: Staying with ${stableDetectedInstrument} (needed 35%, got ${(bestDetection.confidence * 100).toFixed(1)}%)`);
+              console.log(`❌ NOT CONFIDENT ENOUGH: Staying with ${stableDetectedInstrument} (needed ${(confidenceThreshold * 100).toFixed(0)}%, got ${(bestInstrument.weightedScore * 100).toFixed(1)}%)`);
             }
           } else {
             console.log(`⏳ WAITING: Only ${recentDetections.length} detections in last 4 beats (need at least 2)`);
@@ -533,19 +571,77 @@ export default function Home() {
         processHit(onsetTime);
         
         // COLLECT AUTO-DETECTION DATA FROM ONSETS (more reliable than beat-based)
-        if (selectedInstrument === 'auto' && audioAnalysisData.detectedInstrument !== 'auto') {
-          // Add to beat detections buffer from onset (where we have real-time data)
-          beatDetectionsRef.current.push({
-            instrument: audioAnalysisData.detectedInstrument,
-            confidence: audioAnalysisData.detectionConfidence,
-            beatNumber: beatCountRef.current
-          });
+        if (selectedInstrument === 'auto') {
+          // Check for guitar in breakdown even if it's not the top detection
+          const guitarConfidence = audioAnalysisData.detectionBreakdown?.guitar || 0;
+          const currentDetection = audioAnalysisData.detectedInstrument;
+          const currentConfidence = audioAnalysisData.detectionConfidence;
           
-          console.log(`🎯 ONSET #${Date.now()} in AUTO mode: detected=${audioAnalysisData.detectedInstrument} confidence=${(audioAnalysisData.detectionConfidence * 100).toFixed(1)}% - ADDED to beatDetectionsRef (${beatDetectionsRef.current.length} total)`);
+          // Collect guitar detections directly from breakdown
+          if (guitarConfidence > 0.4) {
+            beatDetectionsRef.current.push({
+              instrument: 'guitar',
+              confidence: guitarConfidence,
+              beatNumber: beatCountRef.current
+            });
+            console.log(`🎯 ONSET-GUITAR #${Date.now()} in AUTO mode: detected=guitar confidence=${(guitarConfidence * 100).toFixed(1)}% - ADDED to beatDetectionsRef (${beatDetectionsRef.current.length} total)`);
+          }
+          // Also collect the main detection if it's not auto
+          else if (currentDetection !== 'auto') {
+            const isStringInstrument = currentDetection === 'guitar' || currentDetection === 'bass';
+            const shouldCollect = currentConfidence > 0.5 || (isStringInstrument && currentConfidence > 0.3);
+            
+            if (shouldCollect) {
+              beatDetectionsRef.current.push({
+                instrument: currentDetection,
+                confidence: currentConfidence,
+                beatNumber: beatCountRef.current
+              });
+              
+              console.log(`🎯 ONSET #${Date.now()} in AUTO mode: detected=${currentDetection} confidence=${(currentConfidence * 100).toFixed(1)}% - ADDED to beatDetectionsRef (${beatDetectionsRef.current.length} total)`);
+            }
+          }
         }
       }
     }
   }, [audioAnalysisData.audioLevel, metronomeIsPlaying, processHit, logSettings.onsets, selectedInstrument, audioAnalysisData.detectedInstrument, audioAnalysisData.detectionConfidence]);
+
+  // Continuous detection collection for sustained instruments (guitar/bass)
+  const lastDetectionCollectionRef = useRef<number>(0);
+  useEffect(() => {
+    if (metronomeIsPlaying && selectedInstrument === 'auto') {
+      const now = Date.now();
+      
+      // For guitar, we need to capture detections even when they're not the current stable result
+      // Check if we have any guitar detection in the current analysis
+      const hasGuitarDetection = audioAnalysisData.detectionBreakdown?.guitar > 0.4; // Check breakdown directly
+      const hasBassDetection = audioAnalysisData.detectedInstrument === 'bass' && audioAnalysisData.detectionConfidence > 0.8;
+      
+      // Collect guitar detections more aggressively since they're being missed
+      if (hasGuitarDetection && (now - lastDetectionCollectionRef.current) > 150) {
+        const guitarConfidence = audioAnalysisData.detectionBreakdown?.guitar || 0;
+        beatDetectionsRef.current.push({
+          instrument: 'guitar',
+          confidence: guitarConfidence,
+          beatNumber: beatCountRef.current
+        });
+        
+        console.log(`🎸 GUITAR-DIRECT #${now} in AUTO mode: detected=guitar confidence=${(guitarConfidence * 100).toFixed(1)}% - ADDED to beatDetectionsRef (${beatDetectionsRef.current.length} total)`);
+        lastDetectionCollectionRef.current = now;
+      }
+      // Continue collecting bass as before
+      else if (hasBassDetection && (now - lastDetectionCollectionRef.current) > 200) {
+        beatDetectionsRef.current.push({
+          instrument: 'bass',
+          confidence: audioAnalysisData.detectionConfidence,
+          beatNumber: beatCountRef.current
+        });
+        
+        console.log(`🎸 SUSTAINED #${now} in AUTO mode: detected=bass confidence=${(audioAnalysisData.detectionConfidence * 100).toFixed(1)}% - ADDED to beatDetectionsRef (${beatDetectionsRef.current.length} total)`);
+        lastDetectionCollectionRef.current = now;
+      }
+    }
+  }, [metronomeIsPlaying, selectedInstrument, audioAnalysisData.detectedInstrument, audioAnalysisData.detectionConfidence, audioAnalysisData.detectionBreakdown]);
 
   useEffect(() => {
     return () => {
