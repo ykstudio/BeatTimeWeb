@@ -127,47 +127,55 @@ export interface InstrumentSignature {
 }
 
 export const INSTRUMENT_SIGNATURES: Record<string, InstrumentSignature> = {
-  voice: {
-    // Based on your logs: centroid 647-4065Hz, harmonics present but often weaker than guitar
-    spectralCentroidRange: [600, 4500],
-    dominantBandEnergy: ['bass', 'lowMid', 'mid', 'highMid'],
-    harmonicClarity: 0.6, // Good but not as clear as guitar
-    zcrRange: [50, 250],
-    crestFactorRange: [0.10, 0.45],
-    confidenceWeights: { centroid: 0.20, bands: 0.25, harmonics: 0.30, zcr: 0.15, crest: 0.10 }
-  },
-  shaker: {
-    // RECALIBRATED: Your shaker appears to have different characteristics than expected
-    // From logs: often confused with bass, suggesting lower frequency content
-    spectralCentroidRange: [3000, 7000], // Broadened range
-    dominantBandEnergy: ['highMid', 'presence', 'brilliance'],
-    harmonicClarity: 0.1, // Very poor harmonic structure (noise-like)
-    zcrRange: [400, 1000], // Much higher ZCR for noise-based percussion
-    crestFactorRange: [0.25, 0.50], // High transient content
-    confidenceWeights: { centroid: 0.30, bands: 0.35, harmonics: 0.05, zcr: 0.25, crest: 0.05 }
+  bass: {
+    // From analysis: Working well, pure low-frequency energy signature
+    spectralCentroidRange: [100, 200],
+    dominantBandEnergy: ['sub', 'bass'],
+    harmonicClarity: 0.3, // Weak harmonics as observed
+    zcrRange: [400, 700], // Stable, low ZCR
+    crestFactorRange: [0.01, 0.02], // Very low crest factor (sustained)
+    confidenceWeights: { centroid: 0.40, bands: 0.40, harmonics: 0.10, zcr: 0.05, crest: 0.05 }
   },
   guitar: {
-    // RECALIBRATED: From your logs showing much wider centroid range
-    spectralCentroidRange: [800, 4500], // Much wider range to capture your guitar
-    dominantBandEnergy: ['bass', 'lowMid', 'mid', 'highMid'],
-    harmonicClarity: 0.85, // Excellent harmonic series - this is guitar's strongest signature
-    zcrRange: [30, 200],
-    crestFactorRange: [0.15, 0.40],
-    confidenceWeights: { centroid: 0.15, bands: 0.20, harmonics: 0.45, zcr: 0.10, crest: 0.10 } // Higher weight on harmonics
+    // MAJOR REWRITE: Based on analysis showing rich harmonics but misclassified as bass
+    spectralCentroidRange: [200, 800], // Brighter than bass, but not as high as expected
+    dominantBandEnergy: ['bass', 'lowMid', 'mid'], // Strong in multiple bands
+    harmonicClarity: 0.85, // STRONGEST SIGNATURE: Rich H2-H8 harmonic series
+    zcrRange: [20, 500], // Highly variable due to playing technique
+    crestFactorRange: [0.04, 0.20], // Pick attack creates transients
+    confidenceWeights: { centroid: 0.10, bands: 0.15, harmonics: 0.60, zcr: 0.10, crest: 0.05 } // HEAVY weight on harmonics
   },
-  bass: {
-    // From your logs: working well, keeping similar but slightly adjusted
-    spectralCentroidRange: [100, 500], // Slightly wider
-    dominantBandEnergy: ['sub', 'bass', 'lowMid'],
-    harmonicClarity: 0.6, // Better harmonic structure than originally thought
-    zcrRange: [80, 350], // Broader ZCR range
-    crestFactorRange: [0.04, 0.20], // Broader crest range
-    confidenceWeights: { centroid: 0.35, bands: 0.35, harmonics: 0.15, zcr: 0.10, crest: 0.05 }
+  shaker: {
+    // From analysis: High-frequency noise, correctly detected
+    spectralCentroidRange: [5000, 6000], // Very high centroid
+    dominantBandEnergy: ['presence', 'brilliance'], // Extreme high-frequency content
+    harmonicClarity: 0.05, // Almost no harmonic structure (noise)
+    zcrRange: [1500, 1700], // Very high ZCR
+    crestFactorRange: [0.30, 0.60], // High transient content
+    confidenceWeights: { centroid: 0.35, bands: 0.40, harmonics: 0.05, zcr: 0.15, crest: 0.05 }
+  },
+  voice: {
+    // MAJOR REWRITE: Based on analysis showing mid-band dominance + rich harmonics
+    spectralCentroidRange: [400, 700], // Mid-range centroid
+    dominantBandEnergy: ['lowMid', 'mid', 'highMid'], // KEY: Strong mid-band energy (2000-8700Hz)
+    harmonicClarity: 0.75, // Very rich harmonic content (formant structure)
+    zcrRange: [25, 500], // Variable due to articulation
+    crestFactorRange: [0.09, 0.20], // Moderate dynamics
+    confidenceWeights: { centroid: 0.20, bands: 0.35, harmonics: 0.30, zcr: 0.10, crest: 0.05 } // Emphasize mid-band + harmonics
+  },
+  clap: {
+    // NEW: Based on analysis showing mid-frequency transient with harmonic content
+    spectralCentroidRange: [1100, 4000], // Mid to high centroid
+    dominantBandEnergy: ['mid', 'highMid'], // Strong mid-band energy
+    harmonicClarity: 0.4, // Moderate harmonic content (unexpected!)
+    zcrRange: [350, 650], // High but not as high as shaker
+    crestFactorRange: [0.11, 0.35], // Sharp transient
+    confidenceWeights: { centroid: 0.25, bands: 0.30, harmonics: 0.20, zcr: 0.15, crest: 0.10 }
   }
 };
 
 /**
- * Auto-detect instrument based on real-time audio analysis patterns
+ * Enhanced multi-stage instrument detection based on comprehensive analysis
  */
 export function detectInstrumentType(
   spectralCentroid: number,
@@ -183,16 +191,40 @@ export function detectInstrumentType(
     return { instrument: 'auto', confidence: 0, breakdown: {} };
   }
   
+  // STAGE 1: Quick frequency-based filtering to eliminate impossible matches
+  const candidates: string[] = [];
+  
+  if (spectralCentroid < 300 && frequencyBands.bass?.energy > totalEnergy * 0.3) {
+    candidates.push('bass');
+  }
+  if (spectralCentroid > 4000 && frequencyBands.brilliance?.energy > totalEnergy * 0.4) {
+    candidates.push('shaker');
+  }
+  if (spectralCentroid >= 200 && spectralCentroid <= 1000) {
+    candidates.push('guitar', 'voice');
+  }
+  if (spectralCentroid >= 800 && spectralCentroid <= 4500) {
+    candidates.push('clap', 'voice');
+  }
+  
+  // If no candidates from stage 1, check all instruments
+  if (candidates.length === 0) {
+    candidates.push(...Object.keys(INSTRUMENT_SIGNATURES));
+  }
+  
   let bestMatch = 'auto';
   let bestConfidence = 0;
   let bestBreakdown = {};
   
-  for (const [instrument, signature] of Object.entries(INSTRUMENT_SIGNATURES)) {
+  for (const instrument of candidates) {
+    const signature = INSTRUMENT_SIGNATURES[instrument];
+    if (!signature) continue;
+    
     const weights = signature.confidenceWeights;
     let confidence = 0;
     const breakdown: Record<string, number> = {};
     
-    // 1. Spectral Centroid Match
+    // 1. Spectral Centroid Match (improved scoring)
     const [centroidMin, centroidMax] = signature.spectralCentroidRange;
     let centroidScore = 0;
     if (spectralCentroid >= centroidMin && spectralCentroid <= centroidMax) {
@@ -201,23 +233,66 @@ export function detectInstrumentType(
       const centroidCenter = (centroidMin + centroidMax) / 2;
       const centroidRange = centroidMax - centroidMin;
       const distance = Math.abs(spectralCentroid - centroidCenter) / centroidRange;
-      centroidScore = Math.max(0, 1.0 - distance * 0.8);
+      centroidScore = Math.max(0, 1.0 - distance * 0.5); // More forgiving
     }
     breakdown.centroid = centroidScore;
     confidence += centroidScore * weights.centroid;
     
-    // 2. Frequency Band Energy Distribution
+    // 2. Enhanced Frequency Band Analysis
     let bandScore = 0;
-    for (const expectedBand of signature.dominantBandEnergy) {
-      if (frequencyBands[expectedBand]) {
-        bandScore += frequencyBands[expectedBand].energy / totalEnergy;
+    const expectedBands = signature.dominantBandEnergy;
+    
+    // Calculate energy in expected bands vs total energy
+    let expectedEnergy = 0;
+    for (const bandName of expectedBands) {
+      if (frequencyBands[bandName]) {
+        expectedEnergy += frequencyBands[bandName].energy;
       }
     }
-    bandScore = bandScore / signature.dominantBandEnergy.length;
-    breakdown.bands = bandScore;
-    confidence += bandScore * weights.bands;
     
-    // 3. Zero Crossing Rate Match
+    // Score based on concentration of energy in expected bands
+    bandScore = expectedEnergy / totalEnergy;
+    
+    // SPECIAL CASE: Voice detection - boost for strong mid-band energy
+    if (instrument === 'voice' && frequencyBands.mid?.energy > totalEnergy * 0.3) {
+      bandScore *= 1.5; // 50% boost for strong mid-band
+    }
+    
+    breakdown.bands = Math.min(1.0, bandScore);
+    confidence += Math.min(1.0, bandScore) * weights.bands;
+    
+    // 3. Enhanced Harmonic Analysis
+    const strongHarmonics = harmonics.filter(h => h.level > 30).length; // Lower threshold
+    const veryStrongHarmonics = harmonics.filter(h => h.level > 80).length;
+    
+    let harmonicScore = 0;
+    if (instrument === 'guitar' && strongHarmonics >= 4) {
+      // Guitar gets major boost for rich harmonic content
+      harmonicScore = Math.min(1.0, strongHarmonics / 6);
+      if (veryStrongHarmonics >= 2) harmonicScore *= 1.2;
+    } else if (instrument === 'voice' && strongHarmonics >= 3) {
+      // Voice gets boost for formant-like harmonic structure
+      harmonicScore = Math.min(1.0, strongHarmonics / 5);
+    } else if (instrument === 'bass' && strongHarmonics <= 2) {
+      // Bass gets boost for weak harmonic content
+      harmonicScore = 1.0 - (strongHarmonics / 4);
+    } else if (instrument === 'shaker' && strongHarmonics <= 1) {
+      // Shaker gets boost for no harmonic content
+      harmonicScore = 1.0 - (strongHarmonics / 2);
+    } else if (instrument === 'clap') {
+      // Clap has moderate harmonic content
+      harmonicScore = strongHarmonics >= 2 && strongHarmonics <= 4 ? 1.0 : 0.5;
+    } else {
+      // Fallback to original logic
+      const totalHarmonics = Math.max(harmonics.length, 1);
+      const harmonicRatio = strongHarmonics / totalHarmonics;
+      harmonicScore = 1.0 - Math.abs(harmonicRatio - signature.harmonicClarity);
+    }
+    
+    breakdown.harmonics = Math.min(1.0, harmonicScore);
+    confidence += Math.min(1.0, harmonicScore) * weights.harmonics;
+    
+    // 4. Zero Crossing Rate Match (more forgiving)
     const [zcrMin, zcrMax] = signature.zcrRange;
     let zcrScore = 0;
     if (zcr >= zcrMin && zcr <= zcrMax) {
@@ -226,12 +301,12 @@ export function detectInstrumentType(
       const zcrCenter = (zcrMin + zcrMax) / 2;
       const zcrRange = zcrMax - zcrMin;
       const zcrDistance = Math.abs(zcr - zcrCenter) / zcrRange;
-      zcrScore = Math.max(0, 1.0 - zcrDistance * 0.6);
+      zcrScore = Math.max(0, 1.0 - zcrDistance * 0.3); // More forgiving
     }
     breakdown.zcr = zcrScore;
     confidence += zcrScore * weights.zcr;
     
-    // 4. Crest Factor Match
+    // 5. Crest Factor Match (more forgiving)
     const [crestMin, crestMax] = signature.crestFactorRange;
     let crestScore = 0;
     if (crestFactor >= crestMin && crestFactor <= crestMax) {
@@ -240,18 +315,21 @@ export function detectInstrumentType(
       const crestCenter = (crestMin + crestMax) / 2;
       const crestRange = crestMax - crestMin;
       const crestDistance = Math.abs(crestFactor - crestCenter) / crestRange;
-      crestScore = Math.max(0, 1.0 - crestDistance * 0.5);
+      crestScore = Math.max(0, 1.0 - crestDistance * 0.3); // More forgiving
     }
     breakdown.crest = crestScore;
     confidence += crestScore * weights.crest;
     
-    // 5. Harmonic Clarity Assessment
-    const strongHarmonics = harmonics.filter(h => h.level > 50).length;
-    const totalHarmonics = Math.max(harmonics.length, 1);
-    const harmonicRatio = strongHarmonics / totalHarmonics;
-    const harmonicScore = 1.0 - Math.abs(harmonicRatio - signature.harmonicClarity);
-    breakdown.harmonics = harmonicScore;
-    confidence += harmonicScore * weights.harmonics;
+    // STAGE 3: Instrument-specific confidence boosts
+    if (instrument === 'guitar' && strongHarmonics >= 5) {
+      confidence *= 1.2; // 20% boost for very rich harmonics
+    }
+    if (instrument === 'voice' && frequencyBands.mid?.energy > totalEnergy * 0.4) {
+      confidence *= 1.15; // 15% boost for strong mid-band
+    }
+    if (instrument === 'shaker' && spectralCentroid > 5000) {
+      confidence *= 1.1; // 10% boost for very high centroid
+    }
     
     if (confidence > bestConfidence) {
       bestConfidence = confidence;
@@ -260,8 +338,18 @@ export function detectInstrumentType(
     }
   }
   
-  // Only return detection if confidence is above threshold
-  if (bestConfidence >= confidenceThreshold) {
+  // STAGE 4: Confidence thresholding with instrument-specific thresholds
+  const instrumentThresholds = {
+    bass: 0.40,     // Working well, keep lower threshold
+    guitar: 0.50,   // Needs higher threshold due to complexity
+    voice: 0.45,    // Moderate threshold
+    shaker: 0.40,   // Working well
+    clap: 0.50      // New instrument, higher threshold
+  };
+  
+  const threshold = instrumentThresholds[bestMatch as keyof typeof instrumentThresholds] || confidenceThreshold;
+  
+  if (bestConfidence >= threshold) {
     return { instrument: bestMatch, confidence: bestConfidence, breakdown: bestBreakdown };
   }
   

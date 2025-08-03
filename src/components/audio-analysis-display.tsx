@@ -62,6 +62,12 @@ export default function AudioAnalysisDisplay({ analysisData, logSettings }: Audi
   // Full analysis display when not in performance mode
   const noteName = frequencyToNoteName(dominantFrequency);
   const timbreColor = getTimbreColor(spectralCentroid);
+  
+  // Enhanced pitch/chord display
+  const { pitchAnalysis, chordAnalysis, frequencyPeaks } = analysisData;
+  const enhancedNoteName = pitchAnalysis ? pitchAnalysis.noteName : noteName;
+  const centsDisplay = pitchAnalysis ? (pitchAnalysis.cents > 0 ? `+${pitchAnalysis.cents}` : `${pitchAnalysis.cents}`) : "";
+  const topChord = chordAnalysis.possibleChords.length > 0 ? chordAnalysis.possibleChords[0] : null;
 
   return (
     <Card className="w-full h-full shadow-lg flex flex-col">
@@ -78,18 +84,53 @@ export default function AudioAnalysisDisplay({ analysisData, logSettings }: Audi
                 </div>
             )}
         </div>
-        <div className="w-full h-full grid grid-cols-2 grid-rows-2 gap-4 text-center">
-            <div className="bg-muted/50 rounded-lg p-4 flex flex-col justify-center items-center">
-                <p className="text-sm text-muted-foreground">Dominant Frequency</p>
-                <p className="text-3xl font-bold">{dominantFrequency > 0 ? dominantFrequency.toFixed(0) : "---"} <span className="text-lg font-normal">Hz</span></p>
+        <div className="w-full h-full grid grid-cols-2 gap-4 text-center">
+            <div className="bg-muted/50 rounded-lg p-3 flex flex-col justify-center items-center">
+                <p className="text-sm text-muted-foreground">Enhanced Pitch</p>
+                <p className="text-2xl font-bold">{enhancedNoteName}</p>
+                {centsDisplay && (
+                  <p className="text-xs text-muted-foreground">{centsDisplay} cents</p>
+                )}
+                <p className="text-xs text-muted-foreground">{dominantFrequency > 0 ? dominantFrequency.toFixed(1) : "---"} Hz</p>
             </div>
-            <div className="bg-muted/50 rounded-lg p-4 flex flex-col justify-center items-center">
-                <p className="text-sm text-muted-foreground">Pitch / Note</p>
-                <p className="text-3xl font-bold">{noteName}</p>
+            
+            <div className="bg-muted/50 rounded-lg p-3 flex flex-col justify-center items-center">
+                <p className="text-sm text-muted-foreground">Chord Detection</p>
+                {topChord ? (
+                  <>
+                    <p className="text-2xl font-bold">{topChord.root}{topChord.type}</p>
+                    <p className="text-xs text-muted-foreground">{topChord.confidence.toFixed(1)}% confidence</p>
+                  </>
+                ) : chordAnalysis.detectedNotes.length > 1 ? (
+                  <>
+                    <p className="text-lg font-bold">Multiple Notes</p>
+                    <p className="text-xs text-muted-foreground">
+                      {chordAnalysis.detectedNotes.slice(0, 3).map(n => n.noteName).join(', ')}
+                    </p>
+                  </>
+                ) : (
+                  <p className="text-lg text-muted-foreground">Single Note</p>
+                )}
             </div>
-            <div className="bg-muted/50 rounded-lg p-4 flex flex-col justify-center items-center col-span-2">
+            
+            <div className="bg-muted/50 rounded-lg p-3 flex flex-col justify-center items-center">
+                <p className="text-sm text-muted-foreground">Frequency Peaks</p>
+                <div className="text-xs space-y-1">
+                  {frequencyPeaks.slice(0, 3).map((freq, i) => (
+                    <div key={i} className="text-muted-foreground">
+                      {freq.toFixed(1)} Hz
+                    </div>
+                  ))}
+                  {frequencyPeaks.length === 0 && (
+                    <div className="text-muted-foreground">No peaks</div>
+                  )}
+                </div>
+            </div>
+            
+            <div className="bg-muted/50 rounded-lg p-3 flex flex-col justify-center items-center">
                 <p className="text-sm text-muted-foreground">Timbre</p>
-                 <div className="w-24 h-24 mt-2 rounded-full transition-colors duration-200 border-4" style={{ backgroundColor: timbreColor, borderColor: timbreColor.replace(/(\d+)(%\))$/, (match, p1) => `hsl(0, 0%, ${Math.max(0, parseInt(p1, 10) - 20)}%)`) }} />
+                <div className="w-16 h-16 mt-2 rounded-full transition-colors duration-200 border-4" style={{ backgroundColor: timbreColor, borderColor: timbreColor.replace(/(\d+)(%\))$/, (match, p1) => `hsl(0, 0%, ${Math.max(0, parseInt(p1, 10) - 20)}%)`) }} />
+                <p className="text-xs text-muted-foreground mt-1">{spectralCentroid.toFixed(0)} Hz</p>
             </div>
         </div>
       </CardContent>

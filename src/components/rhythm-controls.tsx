@@ -142,7 +142,7 @@ export default function RhythmControls({ controls, onChange }: RhythmControlsPro
                 value={[controls.onsetThreshold]}
                 onValueChange={(value) => handleChange("onsetThreshold", value[0])}
                 min={0.5}
-                max={5}
+                max={20}
                 step={0.1}
                 className="w-full"
               />

@@ -20,6 +20,8 @@ import RhythmMatrix from '@/components/rhythm-matrix';
 import SongGrid from '@/components/song-grid';
 import { DebugView } from '@/components/debug-view';
 import AudioWaveform from '@/components/audio-waveform';
+import { ConsoleOutput } from '@/components/console-output';
+import { AnalysisTabs } from '@/components/analysis-tabs';
 
 export type PracticeSession = {
   score: number;
@@ -87,7 +89,7 @@ export default function Home() {
     measures: true,
     timingQuality: true,
     songGrid: true,
-    performanceMode: true,  // Enable performance mode by default
+    performanceMode: false,  // Disable performance mode to show full audio analysis
   });
 
   // Store latency in seconds internally for consistency with audio timing
@@ -98,7 +100,7 @@ export default function Home() {
     missContribution: 0,
     timingWindowMs: 200,
     timingWindow: 0.2,
-    onsetThreshold: 1,
+    onsetThreshold: 5,
     streak2Bonus: 10,
     streak3Bonus: 15,
     streak5Bonus: 25,
@@ -126,6 +128,9 @@ export default function Home() {
     detectedInstrument: 'auto',
     detectionConfidence: 0,
     detectionBreakdown: {},
+    pitchAnalysis: null,
+    chordAnalysis: { detectedNotes: [], possibleChords: [], dominantNote: null },
+    frequencyPeaks: [],
   });
 
   const { 
@@ -657,87 +662,28 @@ export default function Home() {
         </div>
     
         <div className="lg:col-span-2 flex flex-col gap-4">
-          {/* Debug View at the top */}
-          <DebugView 
-            visible={true}
+          {/* All Analysis Tools in Tabs */}
+          <AnalysisTabs
+            audioAnalysisData={audioAnalysisData}
+            logSettings={logSettings}
+            onLogSettingsChange={setLogSettings}
+            selectedInstrument={selectedInstrument}
+            onInstrumentSelect={setSelectedInstrument}
+            stableDetectedInstrument={stableDetectedInstrument}
+            stableDetectionConfidence={stableDetectionConfidence}
+            metronomeIsPlaying={metronomeIsPlaying}
+            beatTimes={beatTimesRef.current}
+            beatQualities={beatQualityScores.current}
+            latencyCompensation={latencyCompensation}
+            currentBpm={currentBpm}
+            currentBeatNumber={currentBeatNumber}
             currentBeat={(beatCountRef.current % 4) || 4}
             lastHitTiming={lastHitTiming}
             measureStats={measureStats}
-            audioAnalysis={audioAnalysisData ? {
-              audioLevel: audioAnalysisData.audioLevel,
-              instrumentLevel: audioAnalysisData.instrumentLevel,
-              instrumentFrequency: audioAnalysisData.instrumentFrequency,
-              instrumentConfidence: audioAnalysisData.instrumentConfidence,
-              selectedInstrument: selectedInstrument,
-              onsetThreshold: rhythmControls.onsetThreshold
-            } : undefined}
+            onsetThreshold={rhythmControls.onsetThreshold}
+            fourBeatAccuracy={fourBeatAccuracy}
+            setLatencyCompensation={setLatencyCompensation}
           />
-
-          {/* Auto-Detection Status above audio waveform */}
-          <AutoDetectionStatus 
-            audioData={{
-              ...audioAnalysisData,
-              detectedInstrument: stableDetectedInstrument,
-              detectionConfidence: stableDetectionConfidence
-            }}
-            onInstrumentSelect={setSelectedInstrument}
-          />
-
-          {/* Audio Waveform below auto detection */}
-          {logSettings.timingQuality && (
-            <AudioWaveform 
-              audioData={audioAnalysisData}
-              isActive={metronomeIsPlaying}
-              beatTimes={beatTimesRef.current}
-              beatQualities={beatQualityScores.current}
-              latencyCompensation={latencyCompensation}
-              bpm={currentBpm}
-              currentBeat={currentBeatNumber}
-            />
-          )}
-
-          {/* Rhythm Feedback Section */}
-          <Card className="w-full shadow-lg">
-            <CardHeader>
-              <CardTitle className="text-xl font-bold text-center">Rhythm Feedback</CardTitle>
-              <CardDescription className="text-center">Measure-by-measure accuracy tracking</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="mb-4 space-y-2">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm font-medium">Latency Compensation</span>
-                  <span className="text-sm text-muted-foreground">{Math.round(latencyCompensation * 1000)}ms</span>
-                </div>
-                <input
-                  type="range"
-                  min="0"
-                  max="500"
-                  step="10"
-                  value={latencyCompensation * 1000}
-                  onChange={(e) => setLatencyCompensation(Number(e.target.value) / 1000)}
-                  className="w-full"
-                />
-                <div className="flex justify-between text-xs text-muted-foreground">
-                  <span>0ms</span>
-                  <span>250ms</span>
-                  <span>500ms</span>
-                </div>
-              </div>
-              <div className="flex flex-col items-center gap-4">
-                <RhythmMatrix fourBeatAccuracy={fourBeatAccuracy} />
-                <div className="w-full">
-                  <AudioAnalysisDisplay 
-                    analysisData={audioAnalysisData}
-                    logSettings={logSettings}
-                  />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          
-          <div className="w-full">
-            <LogSettings settings={logSettings} onChange={setLogSettings} />
-          </div>
         </div>
       </div>
     </main>

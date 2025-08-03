@@ -3,6 +3,9 @@
 
 import { useState, useRef, useCallback, Dispatch, SetStateAction, useEffect } from 'react';
 import { analyzeInstrumentFrequencies, detectInstrumentType, INSTRUMENT_PROFILES } from '@/lib/audio';
+import { analyzePitch, analyzeChord, findFrequencyPeaks, PitchAnalysis, ChordAnalysis } from '@/lib/music';
+
+import { PitchAnalysis, ChordAnalysis } from '@/lib/music';
 
 export type AudioAnalysisData = {
   audioLevel: number;
@@ -18,6 +21,10 @@ export type AudioAnalysisData = {
   detectedInstrument: string;
   detectionConfidence: number;
   detectionBreakdown: Record<string, number>;
+  // Enhanced pitch/chord analysis
+  pitchAnalysis: PitchAnalysis | null;
+  chordAnalysis: ChordAnalysis;
+  frequencyPeaks: number[];
 };
 
 export function useAudioData(setAudioAnalysisData: Dispatch<SetStateAction<AudioAnalysisData>>) {
@@ -121,6 +128,11 @@ export function useAudioData(setAudioAnalysisData: Dispatch<SetStateAction<Audio
       if (timeDataArray[i] > peak) peak = timeDataArray[i];
     }
     
+    // Enhanced pitch/chord analysis
+    const frequencyPeaks = findFrequencyPeaks(freqDataArray, audioContextRef.current.sampleRate, 30);
+    const pitchAnalysis = analyzePitch(dominantFrequency);
+    const chordAnalysis = analyzeChord(frequencyPeaks);
+
     // Continuous auto-detection
     const crestFactor = peak > 0 ? rms / peak : 0;
     const currentDetection = detectInstrumentType(
@@ -189,6 +201,23 @@ export function useAudioData(setAudioAnalysisData: Dispatch<SetStateAction<Audio
       console.log(`  🔄 HARMONICS: ${detailedHarmonics.length > 0 ? detailedHarmonics.map(h => `H${h.harmonic}:${h.freq.toFixed(1)}Hz(${h.level})`).join(' | ') : 'none'}`);
       console.log(`  🌊 WAVEFORM: zcr=${zcr} | crest=${crestFactor.toFixed(3)} | confidence=${(instrumentAnalysis.confidenceScore * 100).toFixed(1)}%`);
       console.log(`  🤖 AUTO-DETECT: ${logDetectionResult.instrument} (${(logDetectionResult.confidence * 100).toFixed(1)}%) | centroid:${(logDetectionResult.breakdown.centroid * 100).toFixed(0)}% bands:${(logDetectionResult.breakdown.bands * 100).toFixed(0)}% harmonics:${(logDetectionResult.breakdown.harmonics * 100).toFixed(0)}% zcr:${(logDetectionResult.breakdown.zcr * 100).toFixed(0)}% crest:${(logDetectionResult.breakdown.crest * 100).toFixed(0)}%`);
+      
+      // Enhanced pitch/chord logging
+      if (pitchAnalysis) {
+        console.log(`  🎼 PITCH: ${pitchAnalysis.noteName} (${pitchAnalysis.frequency.toFixed(1)}Hz) | cents: ${pitchAnalysis.cents > 0 ? '+' : ''}${pitchAnalysis.cents} | midi: ${pitchAnalysis.midiNumber}`);
+      }
+      
+      if (chordAnalysis.detectedNotes.length > 1) {
+        console.log(`  🎵 NOTES: ${chordAnalysis.detectedNotes.map(n => `${n.noteName}(${n.frequency.toFixed(1)}Hz)`).join(' | ')}`);
+        if (chordAnalysis.possibleChords.length > 0) {
+          console.log(`  🎶 CHORDS: ${chordAnalysis.possibleChords.map(c => `${c.root}${c.type}(${c.confidence.toFixed(1)}%)`).join(' | ')}`);
+        }
+      }
+      
+      if (frequencyPeaks.length > 0) {
+        console.log(`  📊 PEAKS: ${frequencyPeaks.slice(0, 5).map(f => `${f.toFixed(1)}Hz`).join(' | ')}`);
+      }
+      
       console.log(`  ⏰ TIME: ${currentTime.toFixed(3)}s | stamp=${Date.now()}`);
       console.log('---');
     }
@@ -207,6 +236,10 @@ export function useAudioData(setAudioAnalysisData: Dispatch<SetStateAction<Audio
       detectedInstrument: detectionResult.instrument,
       detectionConfidence: detectionResult.confidence,
       detectionBreakdown: detectionResult.breakdown,
+      // Enhanced pitch/chord analysis
+      pitchAnalysis: pitchAnalysis,
+      chordAnalysis: chordAnalysis,
+      frequencyPeaks: frequencyPeaks,
     });
 
     animationFrameRef.current = requestAnimationFrame(draw);
