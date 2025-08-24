@@ -1,15 +1,18 @@
 "use client";
 
 import { useState } from "react";
+import dynamic from "next/dynamic";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { DebugView } from "@/components/debug-view";
-import { AutoDetectionStatus } from "@/components/auto-detection-status";
-import AudioWaveform from "@/components/audio-waveform";
-import LogSettings, { LogSettingsType } from "@/components/log-settings";
-import { ConsoleOutput } from "@/components/console-output";
+import type { LogSettingsType } from "@/components/log-settings";
 import { AudioAnalysisData } from "@/hooks/use-audio-data";
-import AudioAnalysisDisplay from "@/components/audio-analysis-display";
-import RhythmMatrix from "@/components/rhythm-matrix";
+
+const DebugView = dynamic(() => import("@/components/debug-view").then(m => m.DebugView), { ssr: false });
+const AutoDetectionStatus = dynamic(() => import("@/components/auto-detection-status").then(m => m.AutoDetectionStatus), { ssr: false });
+const AudioWaveform = dynamic(() => import("@/components/audio-waveform"), { ssr: false, loading: () => <div className="h-64" /> });
+const LogSettings = dynamic(() => import("@/components/log-settings"), { ssr: false });
+const ConsoleOutput = dynamic(() => import("@/components/console-output").then(m => m.ConsoleOutput), { ssr: false });
+const AudioAnalysisDisplay = dynamic(() => import("@/components/audio-analysis-display"), { ssr: false });
+const RhythmMatrix = dynamic(() => import("@/components/rhythm-matrix"), { ssr: false });
 
 interface AnalysisTabsProps {
   audioAnalysisData: AudioAnalysisData;
