@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect } from 'react';
+import dynamic from 'next/dynamic';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import Metronome, { type MetronomeHandle } from '@/components/metronome';
@@ -12,16 +13,10 @@ import { useAudioData, type AudioAnalysisData } from '@/hooks/use-audio-data';
 import { calculateAccuracy, TIMING_WINDOW } from '@/lib/audio';
 import LogSettings, { LogSettingsType } from '@/components/log-settings';
 import RhythmControls, { RhythmControlsType } from '@/components/rhythm-controls';
-import { InstrumentSelector } from '@/components/instrument-selector';
-import { InstrumentDataCollector } from '@/components/instrument-data-collector';
-import { AutoDetectionStatus } from '@/components/auto-detection-status';
-import AudioAnalysisDisplay from '@/components/audio-analysis-display';
-import RhythmMatrix from '@/components/rhythm-matrix';
-import SongGrid from '@/components/song-grid';
-import { DebugView } from '@/components/debug-view';
-import AudioWaveform from '@/components/audio-waveform';
-import { ConsoleOutput } from '@/components/console-output';
-import { AnalysisTabs } from '@/components/analysis-tabs';
+const AnalysisTabs = dynamic(() => import('@/components/analysis-tabs').then(m => m.AnalysisTabs), { ssr: false, loading: () => <div className="min-h-40" /> });
+const InstrumentSelector = dynamic(() => import('@/components/instrument-selector').then(m => m.InstrumentSelector), { ssr: false });
+const InstrumentDataCollector = dynamic(() => import('@/components/instrument-data-collector').then(m => m.InstrumentDataCollector), { ssr: false });
+const SongGrid = dynamic(() => import('@/components/song-grid'), { ssr: false });
 
 export type PracticeSession = {
   score: number;
